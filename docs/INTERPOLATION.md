@@ -52,13 +52,16 @@ Windowed sinc interpolation using the Lanczos kernel: L(x) = sinc(x)·sinc(x/a) 
 
 Grid search experiments on Taxi-v3 (264 configs, after removing Savgol and fixing PCHIP) revealed:
 - **Average MAE**: Polar (2.90) ≈ Linear (2.93) ≈ PCHIP (2.98) << Lanczos (5.34)
-- **Surprise**: Linear, polar, and PCHIP perform essentially identically (~2.9 MAE)
-- **Lanczos underperforms** despite theoretical advantages - likely due to over-smoothing or windowing artifacts
+- **Average MSE**: Polar (37.2) << Lanczos (62.9) < Linear (73.5) << PCHIP (182.6)
+- **Robustness (MSE std)**: Polar (71.7) << Linear (338.6) << PCHIP (1236.3!)
+- **Surprise**: MAE alone is misleading - PCHIP looks similar to polar/linear but has **extreme instability**
 - **In excellent configs** (<0.1 MAE): Linear (25) ≈ Polar (25) ≈ PCHIP (22) >> Lanczos (3)
 - **All top 5 configs** use polar interpolation
 - Best config achieves MAE ≈ 10⁻¹⁵ with polar + adaptive/piecewise-centered + Gaussian
 
-**Key insight**: For CVI characteristic functions, simple interpolation methods (linear/polar) work just as well as sophisticated ones (PCHIP). The CF structure is smooth enough that linear suffices. Polar achieves the absolute best peak performance when paired with adaptive grids and Gaussian collapse.
+**Critical insight**: **PCHIP has hidden instability** - despite good average MAE (2.98), it has massive MSE variance (std = 1236.3). Some PCHIP configs work well, but others produce catastrophic errors. Polar has both good average performance AND low variance (MSE std = 71.7) - it's consistently excellent.
 
-**Recommendation**: Use **polar** as default (best peak performance, appears in all top configs). Linear and PCHIP are equally valid alternatives. Avoid Lanczos - it's significantly worse despite theoretical appeal.
+**Key insight**: For CVI characteristic functions, simple interpolation methods (linear/polar) work just as well as sophisticated ones (PCHIP) on average, but are far more **stable and predictable**. The CF structure is smooth enough that linear/polar suffices. Polar achieves the absolute best peak performance AND lowest variance when paired with adaptive grids and Gaussian collapse.
+
+**Recommendation**: Use **polar** as default (best peak performance, lowest variance, appears in all top configs). Linear is a solid alternative. **Avoid PCHIP** despite similar MAE - hidden instability makes it unreliable. Avoid Lanczos - consistently worse.
 

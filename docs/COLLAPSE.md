@@ -25,10 +25,13 @@ Assumes the CF has a Gaussian-like structure: log φ(ω) ≈ iμω - ½σ²ω².
 ## Empirical Performance
 
 Grid search experiments on Taxi-v3 (264 configs, after removing Savgol and fixing PCHIP) revealed:
-- **Gaussian** (MAE ~2.08) >> **LS** (MAE ~3.34) >> **FFT** (MAE ~11.81)
+- **MAE**: Gaussian (2.08) >> LS (3.34) >> FFT (11.81)
+- **MSE**: Gaussian (23.0) < LS (30.5) << FFT (711.8)
+- **RMSE/MAE ratio** (robustness indicator): Gaussian (1.23, best!) < LS (1.40) < FFT (1.61)
 - Gaussian collapse paired with adaptive/piecewise-centered grids and polar interpolation achieves near-zero error (MAE ≈ 10⁻¹⁵)
 - **In excellent configs** (<0.1 MAE): Gaussian dominates with 72/75 (96%), LS has only 3/75 (4%)
-- FFT remains unreliable despite theoretical appeal; likely due to discretization artifacts and normalization issues
 
-**Recommendation**: Use **Gaussian collapse** as default. It exploits the natural structure of characteristic functions and consistently achieves the best accuracy. LS is a solid alternative if you need variance estimation or prefer interpretability. Avoid FFT.
+**Key insight**: **Gaussian is remarkably robust** - lowest RMSE/MAE ratio (1.23) indicates errors are tightly distributed and consistently small. When Gaussian makes mistakes, they're bounded and predictable. FFT's high ratio (1.61) indicates frequent large outlier errors, making it unpredictably bad.
+
+**Recommendation**: Use **Gaussian collapse** as default. It exploits the natural structure of characteristic functions and achieves both the best accuracy AND highest robustness (lowest error variance). LS is a solid alternative if you need variance estimation or prefer interpretability. **STRONGLY avoid FFT** - not just worse on average but produces large unpredictable outliers.
 

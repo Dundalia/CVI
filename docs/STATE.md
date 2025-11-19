@@ -158,3 +158,15 @@ Grid search experiments (264 successful configurations on Taxi-v3) revealed:
   - Gaussian dominates excellent configs: 72/75 (96%)
 - **Grid size impact**: Larger K consistently better: K=512 (2.50) > K=256 (3.30) > K=128 (4.81)
   - Previous concerns about larger K were artifacts of buggy methods (Savgol, pre-fix PCHIP)
+
+**Robustness Analysis (MSE/RMSE metrics)**:
+MSE and RMSE reveal critical insights about method stability beyond average performance:
+- **Uniform grid has dangerous instability**: MSE std = 1216 (4.7x mean) - contains "landmine" configurations with catastrophic errors
+- **PCHIP has hidden variance**: MSE std = 1236 despite similar MAE to linear/polar - unreliable despite good average
+- **Adaptive grid most robust**: MSE std = 20.6 (only 1.6x mean) - consistently good across all settings
+- **Gaussian collapse most stable**: RMSE/MAE ratio = 1.23 (lowest) - errors are tightly bounded and predictable
+- **FFT has outlier problem**: RMSE/MAE ratio = 1.61 - frequently produces large unpredictable errors
+- **K=128 fundamentally unstable**: MSE std = 1104 vs K=512 std = 55 - certain method combinations hit pathological cases
+- **Polar interpolation dominates**: Lowest MSE (37.2) and good variance (71.7) - both accurate AND stable
+
+**Critical insight**: MAE alone is misleading. Methods need both good average performance AND low variance for production use. The winning combination (adaptive + polar + Gaussian) excels on both dimensions.

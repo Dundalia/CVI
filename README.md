@@ -27,12 +27,13 @@ The notebook contains a comprehensive hyperparameter grid search evaluating 264 
   - Interpolation methods: linear, polar, pchip, lanczos
   - Collapse methods: ls, fft, gaussian
 
-- **Key Results**: 
+- **Key Results** (MAE values, with robustness insights from MSE/RMSE): 
   - **Best config**: adaptive + polar + gaussian (MAE ≈ 10⁻¹⁵, exact match with VI)
-  - **Grid strategies**: adaptive (1.61, zero hyperparameters!) > piecewise (1.76) > logarithmic (1.97) > chebyshev (4.98) > uniform (6.09)
-  - **Collapse methods**: gaussian (2.08, 96% of excellent configs) >> ls (3.34) >> fft (11.81)
-  - **Interpolation**: polar (2.90) ≈ linear (2.93) ≈ pchip (2.98) << lanczos (5.34)
-  - **Grid size**: Larger K better: K=512 (2.50) > K=256 (3.30) > K=128 (4.81)
+  - **Grid strategies**: adaptive (1.61, most robust) > piecewise (1.76) > logarithmic (1.97) > chebyshev (4.98) > uniform (6.09, UNSTABLE)
+  - **Collapse methods**: gaussian (2.08, most stable) >> ls (3.34) >> fft (11.81, high variance)
+  - **Interpolation**: polar (2.90, lowest variance) ≈ linear (2.93) << pchip (2.98, hidden instability) << lanczos (5.34)
+  - **Grid size**: Larger K better AND more stable: K=512 (2.50) > K=256 (3.30) > K=128 (4.81, unstable)
+  - **Critical finding**: MSE/RMSE analysis reveals uniform, PCHIP, and FFT have dangerous instability despite reasonable MAE
 
 ### Grid Strategy Comparison
 
@@ -40,7 +41,7 @@ The choice of ω-grid significantly impacts performance. Below shows the distrib
 
 ![Grid Comparison](grid_comparison.png)
 
-**Key insight**: The **adaptive grid strategy** achieves the best performance (MAE 1.61) with **zero hyperparameters** by automatically concentrating density near ω=0 where moment extraction occurs. Combined with polar interpolation and Gaussian collapse, CVI can exactly match classical Value Iteration (MAE ≈ 10⁻¹⁵).
+**Key insight**: The **adaptive grid strategy** achieves the best performance (MAE 1.61) AND highest robustness (lowest MSE variance) with **zero hyperparameters** by automatically concentrating density near ω=0 where moment extraction occurs. Combined with polar interpolation (lowest MSE variance among interpolators) and Gaussian collapse (most stable, RMSE/MAE ratio = 1.23), CVI can exactly match classical Value Iteration (MAE ≈ 10⁻¹⁵). **MSE/RMSE analysis reveals that stability matters as much as average performance** - many methods have hidden instabilities that make them unreliable in practice.
 
 ## Key Methods Implemented
 
