@@ -14,9 +14,6 @@ cd cvi_rl
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Add to Python path (for imports to work)
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 ```
 
 ## Experiment Suite (`experiment_suite.ipynb`)
