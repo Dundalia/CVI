@@ -18,10 +18,28 @@ pip install -r requirements.txt
 
 ## Experiment Suite (`experiment_suite.ipynb`)
 
-The notebook contains a comprehensive hyperparameter grid search evaluating 128 different CVI configurations on Taxi-v3:
+The notebook contains a comprehensive hyperparameter grid search evaluating 342 different CVI configurations on Taxi-v3:
 
-- **Variables tested**: Grid strategies (uniform, piecewise-centered), frequency ranges, grid sizes (128-512), interpolation methods (linear, polar, pchip, lanczos), and collapse methods (ls, fft, gaussian, savgol)
-- **Key Results**: Best configuration (piecewise-centered + polar + gaussian) achieves near-zero error (MAE ≈ 10⁻¹⁵), exactly recovering VI Q-values
+- **Variables tested**: 
+  - Grid strategies: uniform, piecewise-centered, logarithmic, chebyshev, adaptive
+  - Frequency ranges (W): 10.0, 20.0
+  - Grid sizes (K): 128, 256, 512
+  - Interpolation methods: linear, polar, pchip, lanczos
+  - Collapse methods: ls, fft, gaussian, savgol
+
+- **Key Results**: 
+  - Best config: piecewise-centered + polar + gaussian (MAE ≈ 10⁻¹⁵, exact match with VI)
+  - Grid strategies: logarithmic ≈ adaptive ≈ piecewise-centered (~3.0) >> uniform (~5.5) >> chebyshev (~38.6, fails badly)
+  - Collapse methods: gaussian (2.3) >> ls (3.6) >> fft (11.8) >> savgol (28.6)
+  - Interpolation: lanczos most consistent (5.3), polar achieves best peak performance with right combinations
+
+### Grid Strategy Comparison
+
+The choice of ω-grid significantly impacts performance. Below shows the distribution of grid points for each strategy:
+
+![Grid Comparison](grid_comparison.png)
+
+**Key insight**: Dense sampling near ω=0 is critical for accurate moment extraction. Logarithmic and adaptive strategies successfully match piecewise-centered performance without manual hyperparameter tuning.
 
 ## Key Methods Implemented
 
@@ -39,5 +57,10 @@ The notebook contains a comprehensive hyperparameter grid search evaluating 128 
 
 ## Documentation
 
-See `docs/STATE.md` for detailed information on implementation design choices, mathematical formulations, experimental findings, and known limitations.
+Comprehensive documentation is available in the `docs/` directory:
+
+- **`STATE.md`**: Overall implementation status, design choices, experimental findings, and known limitations
+- **`GRIDS.md`**: Grid construction methods (uniform, piecewise-centered, logarithmic, chebyshev, adaptive)
+- **`INTERPOLATION.md`**: Interpolation methods for evaluating V(s, γω) at off-grid frequencies
+- **`COLLAPSE.md`**: Collapse methods for extracting scalar Q-values from characteristic functions
 

@@ -133,8 +133,8 @@ A comprehensive hyperparameter grid search was conducted to evaluate the perform
 **Experimental Design**:
 - **Environment**: Taxi-v3 (500 states, 6 actions)
 - **Baseline**: Classical Value Iteration with γ=0.9
-- **Configurations tested**: 128 combinations spanning:
-  - Grid strategies: uniform, piecewise-centered
+- **Configurations tested**: 342 combinations spanning:
+  - Grid strategies: uniform, piecewise-centered, logarithmic, chebyshev, adaptive
   - Frequency ranges (W): 10.0, 20.0
   - Grid sizes (K): 128, 256, 512
   - Interpolation methods: linear, polar, pchip, lanczos
@@ -143,11 +143,14 @@ A comprehensive hyperparameter grid search was conducted to evaluate the perform
 - **Goal**: Identify which combinations of methods allow CVI to exactly recover the optimal policy
 
 **Key Findings**:
-Grid search experiments (128 configurations on Taxi-v3) revealed:
+Grid search experiments (342 configurations on Taxi-v3, testing 5 grid strategies) revealed:
 - **Best configuration**: piecewise-centered grid + polar interpolation + gaussian collapse
   - Achieves near-zero error (MAE ≈ 10⁻¹⁵, exact match with VI)
-- **Collapse method impact**: Gaussian (best) > LS > Savgol >> FFT (worst)
-- **Grid strategy impact**: Piecewise-centered grids ~3x better than uniform
-- **Interpolation impact**: Polar ≈ Linear > Lanczos > PCHIP
-- **Grid size impact**: Larger K improves accuracy but with diminishing returns
-- High sensitivity to hyperparameters observed (std comparable to mean in many cases)
+- **Grid strategy impact**: Piecewise-centered ≈ Logarithmic ≈ Adaptive (~3.0) >> Uniform (~5.5) >> Chebyshev (~38.6, terrible)
+  - Logarithmic and adaptive successfully match piecewise-centered without manual tuning
+  - Chebyshev dramatically fails despite theoretical advantages (wrong density distribution for CVI)
+- **Interpolation impact**: Lanczos (5.3) most consistent, but Polar achieves best peak performance with right combinations
+  - Strong interaction effects: polar excels with piecewise/logarithmic + Gaussian but performs poorly otherwise
+- **Collapse method impact**: Gaussian (2.3) >> LS (3.6) >> FFT (11.8) >> Savgol (28.6, unexpectedly poor)
+- **Grid size impact**: Complex interaction effects - best configs achieve near-zero error regardless of K, but poor strategies degrade with larger K
+- High sensitivity to hyperparameters and strong interaction effects observed

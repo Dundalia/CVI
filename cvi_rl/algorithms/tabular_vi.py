@@ -17,11 +17,6 @@ def value_iteration(
     """
     Classical tabular Value Iteration for a TabularEnvSpec.
 
-    This is a direct refactoring of your original implementation:
-    - asynchronous in-place updates over states
-    - uses env_spec.P[s][a] = list of (prob, next_state, reward, done)
-    - handles terminal states by zeroing out future value when done == True
-
     Parameters
     ----------
     env_spec : TabularEnvSpec

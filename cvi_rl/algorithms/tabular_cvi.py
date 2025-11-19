@@ -152,7 +152,7 @@ def cvi_policy_evaluation(
 
       V(s, ω) = φ_R(s, ω) * E[V(S', γ ω) | s, a=π(s)]
 
-    We approximate this on a finite ω-grid, using linear interpolation
+    We approximate this on a finite ω-grid, using various interpolation methods
     to evaluate V(s, γ ω) between grid points.
     """
     n_states = env_spec.n_states
@@ -322,13 +322,7 @@ def collapse_q_cf_to_scalar_mean(
     **kwargs,
 ) -> np.ndarray:
     """
-    Collapse Q_cf(s,a,ω) into scalar Q(s,a) by extracting the mean return.
-
-    For each (s,a), we approximate the expected return:
-
-      Q(s,a) ≈ E[G(s,a)] = Im(φ'(0))
-
-    where φ(ω) = Q_cf(s,a,ω) is the CF of the return starting from (s,a).
+    Collapse Q_cf(s,a,ω) into scalar Q(s,a), using a variety of methods.
 
     Parameters
     ----------

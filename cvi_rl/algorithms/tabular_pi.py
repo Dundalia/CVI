@@ -16,12 +16,6 @@ def policy_evaluation(
     """
     Iterative policy evaluation for a fixed tabular policy π.
 
-    This is a refactoring of your original `policy_eval`:
-    - maintains both V_pi and Q_pi
-    - updates Q_pi via Bellman expectation
-    - sets V_pi(s) = Q_pi(s, π(s))
-    - stops when max |V_new - V_old| < termination
-
     Parameters
     ----------
     env_spec : TabularEnvSpec
@@ -82,8 +76,6 @@ def policy_improvement(
     """
     Policy improvement step: given V(s), compute a greedy policy.
 
-    This is the general version of your old `policy_improvement(values)`.
-
     Parameters
     ----------
     env_spec : TabularEnvSpec
@@ -128,7 +120,7 @@ def policy_iteration(
     return_history: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, Optional[List[np.ndarray]]]:
     """
-    Classic Policy Iteration (Howard’s algorithm):
+    Classic Policy Iteration:
       1. Policy Evaluation (via iterative evaluation)
       2. Policy Improvement
     until policy stabilizes or max_policy_iters is reached.

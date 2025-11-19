@@ -20,7 +20,7 @@ def q_learning(
     track_q_every: Optional[int] = 10,
 ) -> Tuple[np.ndarray, np.ndarray, List[float], List[np.ndarray]]:
     """
-    Tabular Q-learning, refactored from your original implementation.
+    Tabular Q-learning.
 
     Parameters
     ----------
