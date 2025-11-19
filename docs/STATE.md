@@ -133,24 +133,28 @@ A comprehensive hyperparameter grid search was conducted to evaluate the perform
 **Experimental Design**:
 - **Environment**: Taxi-v3 (500 states, 6 actions)
 - **Baseline**: Classical Value Iteration with γ=0.9
-- **Configurations tested**: 342 combinations spanning:
+- **Configurations tested**: 264 successful combinations (after removing Savgol, fixing PCHIP) spanning:
   - Grid strategies: uniform, piecewise-centered, logarithmic, chebyshev, adaptive
   - Frequency ranges (W): 10.0, 20.0
   - Grid sizes (K): 128, 256, 512
   - Interpolation methods: linear, polar, pchip, lanczos
-  - Collapse methods: ls, fft, gaussian, savgol
+  - Collapse methods: ls, fft, gaussian
 - **Evaluation metric**: Mean Absolute Error (MAE) between CVI-derived Q-values and classical VI Q-values
 - **Goal**: Identify which combinations of methods allow CVI to exactly recover the optimal policy
 
 **Key Findings**:
-Grid search experiments (342 configurations on Taxi-v3, testing 5 grid strategies) revealed:
-- **Best configuration**: piecewise-centered grid + polar interpolation + gaussian collapse
+Grid search experiments (264 successful configurations on Taxi-v3) revealed:
+- **Best configuration**: adaptive/piecewise-centered grid + polar interpolation + gaussian collapse
   - Achieves near-zero error (MAE ≈ 10⁻¹⁵, exact match with VI)
-- **Grid strategy impact**: Piecewise-centered ≈ Logarithmic ≈ Adaptive (~3.0) >> Uniform (~5.5) >> Chebyshev (~38.6, terrible)
-  - Logarithmic and adaptive successfully match piecewise-centered without manual tuning
-  - Chebyshev dramatically fails despite theoretical advantages (wrong density distribution for CVI)
-- **Interpolation impact**: Lanczos (5.3) most consistent, but Polar achieves best peak performance with right combinations
-  - Strong interaction effects: polar excels with piecewise/logarithmic + Gaussian but performs poorly otherwise
-- **Collapse method impact**: Gaussian (2.3) >> LS (3.6) >> FFT (11.8) >> Savgol (28.6, unexpectedly poor)
-- **Grid size impact**: Complex interaction effects - best configs achieve near-zero error regardless of K, but poor strategies degrade with larger K
-- High sensitivity to hyperparameters and strong interaction effects observed
+- **Grid strategy impact**: Adaptive (1.61) > Piecewise-centered (1.76) > Logarithmic (1.97) > Chebyshev (4.98) > Uniform (6.09)
+  - **Adaptive is the clear winner** with zero hyperparameters - automatically concentrates density near ω=0
+  - Appears in 20/75 excellent configs (most of any strategy)
+  - Chebyshev improved after fixes but still poor (wrong density distribution for CVI)
+- **Interpolation impact**: Linear (2.93) ≈ Polar (2.90) ≈ PCHIP (2.98) << Lanczos (5.34)
+  - Surprise: Simple methods work just as well as sophisticated ones
+  - Polar appears in all top 5 configs (best peak performance)
+  - Lanczos significantly underperforms despite theoretical advantages
+- **Collapse method impact**: Gaussian (2.08) >> LS (3.34) >> FFT (11.81)
+  - Gaussian dominates excellent configs: 72/75 (96%)
+- **Grid size impact**: Larger K consistently better: K=512 (2.50) > K=256 (3.30) > K=128 (4.81)
+  - Previous concerns about larger K were artifacts of buggy methods (Savgol, pre-fix PCHIP)

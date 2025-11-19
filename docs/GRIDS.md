@@ -59,12 +59,18 @@ Three-region grid: very dense near 0 (50% points in 20% range), medium density i
 
 ## Empirical Performance
 
-Grid search experiments on Taxi-v3 (342 configs with all 5 strategies) revealed:
-- **Piecewise-centered** (MAE ~3.0) ≈ **logarithmic** (MAE ~3.0) ≈ **adaptive** (MAE ~3.1) >> **uniform** (MAE ~5.5) >> **chebyshev** (MAE ~38.6, worst!)
-- Chebyshev dramatically underperforms despite theoretical advantages for interpolation (boundary density is wrong for CVI)
-- Logarithmic and adaptive successfully match piecewise-centered without manual hyperparameter tuning
-- Best overall config: piecewise-centered + polar + Gaussian (MAE ≈ 10⁻¹⁵), but all three top strategies can achieve near-zero error with right collapse/interpolation
-- Grid size K shows complex interaction effects: best configs achieve near-zero error regardless of K, but poor grid strategies (especially Chebyshev) degrade significantly with larger K
+Grid search experiments on Taxi-v3 (264 configs, after removing Savgol and fixing PCHIP) revealed:
+- **Adaptive**: MAE ~1.61 (BEST - zero hyperparameters!)
+- **Piecewise-centered**: MAE ~1.76 (excellent, but requires tuning w_center, frac_center)
+- **Logarithmic** (λ=2.0): MAE ~1.97 (good, single parameter)
+- **Chebyshev**: MAE ~4.98 (poor - dense at wrong locations)
+- **Uniform**: MAE ~6.09 (baseline)
 
-**Recommendation**: Use **logarithmic** (single parameter λ=2.0) or **adaptive** (zero parameters) for simplicity, or **piecewise-centered** if you want the proven best. Avoid Chebyshev for CVI. K=256 provides good balance of accuracy and efficiency.
+**Key findings**:
+- Adaptive achieves best performance (20/75 excellent configs) with **zero hyperparameters** - it automatically concentrates density near ω=0
+- All top 5 configs use adaptive or piecewise-centered grids with polar + Gaussian
+- Best configs achieve MAE ≈ 10⁻¹⁵ (exact match with VI)
+- **Larger K consistently better**: K=512 (MAE ~2.5) > K=256 (~3.3) > K=128 (~4.8)
+
+**Recommendation**: Use **adaptive** as default (best performance, zero tuning required). Use **logarithmic** if you want explicit control via λ. Avoid Chebyshev and uniform for CVI. Use K=512 for best accuracy, K=256 for good speed/accuracy tradeoff.
 

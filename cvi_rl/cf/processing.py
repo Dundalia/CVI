@@ -5,7 +5,7 @@ import numpy as np
 import scipy.signal
 import scipy.interpolate
 
-CollapseMethod = Literal["ls", "fft", "gaussian", "savgol"]
+CollapseMethod = Literal["ls", "fft", "gaussian"]
 InterpolationMethod = Literal["linear", "polar", "pchip", "lanczos"]
 
 # -----------------------------------------------------------------------------
@@ -130,46 +130,6 @@ def estimate_mean_gaussian(
         
     mu = num / den
     return float(mu)
-
-
-def estimate_mean_savgol(
-    omegas: np.ndarray,
-    phi: np.ndarray,
-    window_length: int = 7,
-    polyorder: int = 2,
-) -> float:
-    """
-    Estimate E[G] = Im(φ'(0)) using a Savitzky-Golay filter to smooth
-    and differentiate the imaginary part of φ.
-    """
-    # Ensure window_length is odd and <= len(omegas)
-    if window_length > len(omegas):
-        window_length = len(omegas)
-        if window_length % 2 == 0:
-            window_length -= 1
-            
-    if window_length < polyorder + 2:
-        # Fallback to LS if not enough points
-        return estimate_mean_ls(omegas, phi)
-        
-    d_omega = omegas[1] - omegas[0] # assume uniform roughly for scale
-    
-    # Calculate 1st derivative of imaginary part
-    # deriv=1
-    imag_deriv = scipy.signal.savgol_filter(
-        phi.imag, 
-        window_length=window_length, 
-        polyorder=polyorder, 
-        deriv=1, 
-        delta=d_omega,
-        mode='interp'
-    )
-    
-    # Extract value at 0
-    idx0 = int(np.argmin(np.abs(omegas)))
-    mean_est = imag_deriv[idx0]
-    
-    return float(mean_est)
 
 
 # -----------------------------------------------------------------------------

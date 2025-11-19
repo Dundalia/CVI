@@ -14,7 +14,6 @@ from cvi_rl.cf.processing import (
     estimate_mean_ls,
     estimate_mean_fft,
     estimate_mean_gaussian,
-    estimate_mean_savgol,
     interpolate_linear,
     interpolate_polar,
     interpolate_pchip,
@@ -358,8 +357,6 @@ def collapse_q_cf_to_scalar_mean(
                 val = estimate_mean_fft(omegas, phi_sa)
             elif method == "gaussian":
                 val = estimate_mean_gaussian(omegas, phi_sa, **kwargs)
-            elif method == "savgol":
-                val = estimate_mean_savgol(omegas, phi_sa, **kwargs)
             else:
                 raise ValueError(f"Unknown collapse method: {method}")
                 

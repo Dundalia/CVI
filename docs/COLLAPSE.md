@@ -1,60 +1,34 @@
-# Collapse Methods for CVI
+# Collapse Methods
 
-## Why Collapsing is Needed
+## Why Collapse?
 
-CVI computes the full characteristic function φ(ω) = E[e^(iωG)] representing the return distribution. To derive scalar Q-values for greedy action selection, we must **collapse** the CF to extract the mean return: E[G] = Im(φ'(0)). This is the "collapse" step that bridges distributional evaluation to classical control.
-
-**What we collapse**: Complex-valued characteristic functions φ(ω) defined on a discrete grid. The goal is to accurately estimate the derivative φ'(0) from sampled values, then extract its imaginary part as the mean.
+CVI operates in the frequency domain, representing return distributions via characteristic functions φ(ω) = E[e^(iωG)]. To extract scalar Q-values for action selection, we need to **collapse** the CF back to its first moment: Q(s,a) = E[G(s,a)]. This is a critical step that bridges frequency-domain learning with standard RL control.
 
 ---
 
-## Implemented Methods
+## Methods
 
-### 1. LS (Least Squares)
-Fits a local quadratic φ(ω) ≈ a₀ + a₁ω + a²ω² around ω=0 using a window of ±m grid points.
+### 1. Least Squares (LS)
 
-**Approach**: Use least-squares regression on complex coefficients, extract a₁, return Im(a₁).
+Fits a local quadratic polynomial φ(ω) ≈ a₀ + a₁ω + a₂ω² around ω=0 using nearby grid points. The mean is extracted from the imaginary part of the linear coefficient: E[G] = Im(a₁). Simple, interpretable, and works well with non-uniform grids. Uses m=4 neighbors by default.
 
-**Pros**: Robust to noise; can also estimate variance from a₂; simple and interpretable; consistent performance across problems.
+### 2. Fast Fourier Transform (FFT)
 
-**Cons**: Requires manual tuning of window size m; assumes local smoothness; quadratic approximation may not capture complex CF shapes.
+Directly inverts the CF to the spatial domain via IFFT to recover the probability density, then computes the mean in the spatial domain. Theoretically elegant but requires a strictly uniform grid and suffers from discretization artifacts. In practice, produces high errors (MAE ~11.8) likely due to normalization issues and boundary effects.
 
-### 2. FFT (Fast Fourier Transform)
-Applies inverse FFT to transform φ(ω) from frequency domain to spatial domain, obtaining the PDF/PMF of returns, then computes mean directly.
+### 3. Gaussian Fit
 
-**Approach**: `pdf = IFFT(φ(ω))`, then `E[G] = Σ x·pdf(x)`.
-
-**Pros**: Theoretically elegant; recovers full distribution (not just mean); no local approximation needed.
-
-**Cons**: Requires uniform grid; highly sensitive to aliasing and normalization; poor empirical performance (worst in experiments with MAE ~11.8 vs ~1.5 for Gaussian).
-
-### 3. Gaussian (Phase Unwrapping)
-Assumes locally Gaussian CF: log φ(ω) ≈ iμω - ½σ²ω², then fits a line to unwrapped phase to extract mean μ.
-
-**Approach**: Compute phase = unwrap(arg(φ(ω))), fit linear regression phase ≈ μω, return μ.
-
-**Pros**: Leverages the structure of characteristic functions; most accurate in experiments (best performer with MAE ~1.5); naturally handles Gaussian-like return distributions.
-
-**Cons**: Assumes local Gaussian structure (may fail for multimodal or heavy-tailed distributions); phase unwrapping can be unstable near discontinuities.
-
-### 4. Savitzky-Golay
-Applies a Savitzky-Golay smoothing filter with derivative estimation to Im(φ(ω)), then evaluates at ω=0.
-
-**Approach**: Use `scipy.signal.savgol_filter` with `deriv=1` on Im(φ), extract value at ω=0.
-
-**Pros**: Smooths noise while computing derivative; configurable window and polynomial order; well-established numerical method.
-
-**Cons**: Requires uniform or nearly-uniform grid spacing; tuning window_length and polyorder can be tricky; moderate performance (MAE ~4.3).
+Assumes the CF has a Gaussian-like structure: log φ(ω) ≈ iμω - ½σ²ω². Extracts the mean μ by unwrapping the phase arg(φ) and fitting a line through the origin. Exploits the natural shape of bounded-reward CFs and consistently achieves the best performance (MAE ~2.3). Robust to grid type and most reliable method overall.
 
 ---
 
 ## Empirical Performance
 
-Grid search experiments on Taxi-v3 (342 configs) revealed:
-- **Gaussian** (MAE ~2.3) >> **LS** (MAE ~3.6) >> **FFT** (MAE ~11.8) >> **Savgol** (MAE ~28.6)
-- Gaussian collapse paired with piecewise-centered grids and polar interpolation achieves near-zero error (MAE ≈ 10⁻¹⁵)
-- FFT is unreliable despite theoretical appeal; likely due to discretization artifacts and normalization issues
-- Savgol performs much worse than expected (high variance), possibly due to sensitivity to non-uniform grids from new strategies
+Grid search experiments on Taxi-v3 (264 configs, after removing Savgol and fixing PCHIP) revealed:
+- **Gaussian** (MAE ~2.08) >> **LS** (MAE ~3.34) >> **FFT** (MAE ~11.81)
+- Gaussian collapse paired with adaptive/piecewise-centered grids and polar interpolation achieves near-zero error (MAE ≈ 10⁻¹⁵)
+- **In excellent configs** (<0.1 MAE): Gaussian dominates with 72/75 (96%), LS has only 3/75 (4%)
+- FFT remains unreliable despite theoretical appeal; likely due to discretization artifacts and normalization issues
 
-**Recommendation**: Use **Gaussian collapse** as default. It exploits the natural structure of characteristic functions and consistently achieves the best accuracy. LS is a solid alternative if you need variance estimation or prefer interpretability. Avoid Savgol and FFT.
+**Recommendation**: Use **Gaussian collapse** as default. It exploits the natural structure of characteristic functions and consistently achieves the best accuracy. LS is a solid alternative if you need variance estimation or prefer interpretability. Avoid FFT.
 

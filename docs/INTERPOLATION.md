@@ -50,11 +50,15 @@ Windowed sinc interpolation using the Lanczos kernel: L(x) = sinc(x)·sinc(x/a) 
 
 ## Empirical Performance
 
-Grid search experiments on Taxi-v3 (342 configs) revealed:
-- **Average MAE**: Lanczos (5.3) < Linear (9.9) < Polar (14.4) < PCHIP (17.6)
-- **Best config**: Uses **polar** interpolation despite higher average MAE (interaction effect with grid/collapse)
-- **Explanation**: Polar achieves near-zero error with optimal combinations (piecewise-centered + Gaussian) but performs poorly with mismatched settings. Lanczos is more consistently good across all configs but never reaches the absolute best performance.
-- High standard deviations for polar/PCHIP/linear indicate strong parameter interactions
+Grid search experiments on Taxi-v3 (264 configs, after removing Savgol and fixing PCHIP) revealed:
+- **Average MAE**: Polar (2.90) ≈ Linear (2.93) ≈ PCHIP (2.98) << Lanczos (5.34)
+- **Surprise**: Linear, polar, and PCHIP perform essentially identically (~2.9 MAE)
+- **Lanczos underperforms** despite theoretical advantages - likely due to over-smoothing or windowing artifacts
+- **In excellent configs** (<0.1 MAE): Linear (25) ≈ Polar (25) ≈ PCHIP (22) >> Lanczos (3)
+- **All top 5 configs** use polar interpolation
+- Best config achieves MAE ≈ 10⁻¹⁵ with polar + adaptive/piecewise-centered + Gaussian
 
-**Recommendation**: Use **lanczos** for robustness across settings, or **polar** if paired with piecewise-centered/logarithmic grids and Gaussian collapse for best possible accuracy.
+**Key insight**: For CVI characteristic functions, simple interpolation methods (linear/polar) work just as well as sophisticated ones (PCHIP). The CF structure is smooth enough that linear suffices. Polar achieves the absolute best peak performance when paired with adaptive grids and Gaussian collapse.
+
+**Recommendation**: Use **polar** as default (best peak performance, appears in all top configs). Linear and PCHIP are equally valid alternatives. Avoid Lanczos - it's significantly worse despite theoretical appeal.
 

@@ -18,20 +18,21 @@ pip install -r requirements.txt
 
 ## Experiment Suite (`experiment_suite.ipynb`)
 
-The notebook contains a comprehensive hyperparameter grid search evaluating 342 different CVI configurations on Taxi-v3:
+The notebook contains a comprehensive hyperparameter grid search evaluating 264 successful CVI configurations on Taxi-v3:
 
 - **Variables tested**: 
   - Grid strategies: uniform, piecewise-centered, logarithmic, chebyshev, adaptive
   - Frequency ranges (W): 10.0, 20.0
   - Grid sizes (K): 128, 256, 512
   - Interpolation methods: linear, polar, pchip, lanczos
-  - Collapse methods: ls, fft, gaussian, savgol
+  - Collapse methods: ls, fft, gaussian
 
 - **Key Results**: 
-  - Best config: piecewise-centered + polar + gaussian (MAE ≈ 10⁻¹⁵, exact match with VI)
-  - Grid strategies: logarithmic ≈ adaptive ≈ piecewise-centered (~3.0) >> uniform (~5.5) >> chebyshev (~38.6, fails badly)
-  - Collapse methods: gaussian (2.3) >> ls (3.6) >> fft (11.8) >> savgol (28.6)
-  - Interpolation: lanczos most consistent (5.3), polar achieves best peak performance with right combinations
+  - **Best config**: adaptive + polar + gaussian (MAE ≈ 10⁻¹⁵, exact match with VI)
+  - **Grid strategies**: adaptive (1.61, zero hyperparameters!) > piecewise (1.76) > logarithmic (1.97) > chebyshev (4.98) > uniform (6.09)
+  - **Collapse methods**: gaussian (2.08, 96% of excellent configs) >> ls (3.34) >> fft (11.81)
+  - **Interpolation**: polar (2.90) ≈ linear (2.93) ≈ pchip (2.98) << lanczos (5.34)
+  - **Grid size**: Larger K better: K=512 (2.50) > K=256 (3.30) > K=128 (4.81)
 
 ### Grid Strategy Comparison
 
@@ -39,21 +40,20 @@ The choice of ω-grid significantly impacts performance. Below shows the distrib
 
 ![Grid Comparison](grid_comparison.png)
 
-**Key insight**: Dense sampling near ω=0 is critical for accurate moment extraction. Logarithmic and adaptive strategies successfully match piecewise-centered performance without manual hyperparameter tuning.
+**Key insight**: The **adaptive grid strategy** achieves the best performance (MAE 1.61) with **zero hyperparameters** by automatically concentrating density near ω=0 where moment extraction occurs. Combined with polar interpolation and Gaussian collapse, CVI can exactly match classical Value Iteration (MAE ≈ 10⁻¹⁵).
 
 ## Key Methods Implemented
 
 ### Interpolation (for V(s, γω))
-- **Linear**: Cartesian interpolation of real/imaginary parts
-- **Polar**: Magnitude/phase interpolation (best performer)
-- **PCHIP**: Monotonicity-preserving cubic
-- **Lanczos**: Windowed sinc interpolation
+- **Polar**: Magnitude/phase interpolation (best peak performance, appears in all top configs)
+- **Linear**: Cartesian interpolation of real/imaginary parts (equally good average performance)
+- **PCHIP**: Monotonicity-preserving cubic (equally good average performance)
+- **Lanczos**: Windowed sinc interpolation (underperforms despite theoretical advantages)
 
 ### Collapse (extracting mean from CF)
-- **LS**: Least-squares quadratic fit around ω=0
-- **FFT**: Inverse Fourier transform to spatial domain
-- **Gaussian**: Phase unwrapping with linear regression (best performer)
-- **Savitzky-Golay**: Smoothing filter with derivative estimation
+- **Gaussian**: Phase unwrapping with linear regression (best performer, 96% of excellent configs)
+- **LS**: Least-squares quadratic fit around ω=0 (solid alternative)
+- **FFT**: Inverse Fourier transform to spatial domain (unreliable)
 
 ## Documentation
 

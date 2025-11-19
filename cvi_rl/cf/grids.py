@@ -86,7 +86,11 @@ def make_piecewise_centered_grid(
 
         omegas = np.concatenate([left_pad, omegas, right_pad])
 
-    omegas = np.sort(omegas)
+    # Ensure strictly increasing (remove duplicates and sort)
+    omegas = np.unique(omegas)
+    
+    # If we lost points due to duplicates, we might have fewer than K
+    # This is acceptable - strictly increasing is more important
     return omegas
 
 
@@ -261,7 +265,9 @@ def make_adaptive_grid(
         insert_point = (omegas[max_gap_idx] + omegas[max_gap_idx + 1]) / 2
         omegas = np.sort(np.append(omegas, insert_point))[:K]
     
-    return np.sort(omegas)
+    # Ensure strictly increasing (remove duplicates)
+    omegas = np.unique(omegas)
+    return omegas
 
 
 def make_omega_grid(
