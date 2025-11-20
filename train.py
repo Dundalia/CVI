@@ -183,6 +183,18 @@ Examples:
         if WANDB_AVAILABLE and wandb_run is not None:
             wandb.summary.update(results['metrics'])
         
+        # Save policy if available
+        if 'policy' in results:
+            policy_filename = f"{algorithm}_{env_name}_policy.npy"
+            np.save(f"saved_policies/{policy_filename}", results['policy'])
+            print(f"Policy saved to saved_policies/{policy_filename}")
+            
+            if wandb_run is not None:
+                artifact = wandb.Artifact(f"{algorithm}_{env_name}_policy", type="policy")
+                artifact.add_file(f"saved_policies/{policy_filename}")
+                wandb_run.log_artifact(artifact)
+                print(f"Policy uploaded to W&B as artifact: {algorithm}_{env_name}_policy")
+        
         print("\n" + "="*60)
         print("Training completed successfully!")
         print("="*60)

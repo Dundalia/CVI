@@ -11,7 +11,7 @@ training:
     function: run_cvi
     grid_strategy: piecewise_centered  # Tuned: Best grid construction
     W: 20.0  # Tuned: Best frequency range [-W, W]
-    K: 128  # Tuned: Best number of grid points
+    K: 256  # Tuned: Best number of grid points
     interp_method: polar  # Tuned: Best interpolation method
     collapse_method: gaussian  # Tuned: Best collapse method
     eval_termination: 1e-6  # Shared: Convergence threshold
