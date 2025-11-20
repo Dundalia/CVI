@@ -1,5 +1,7 @@
 # cvi_rl/algorithms/tabular_pi.py
 
+#! Determenistic Tabular Policy Iteration
+
 from __future__ import annotations
 from typing import Tuple, Optional, List
 import numpy as np
@@ -9,9 +11,9 @@ from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
 def policy_evaluation(
     env_spec: TabularEnvSpec,
     policy: np.ndarray,
-    gamma: float = 0.9,
-    termination: float = 1e-2,
-    max_iters: int = 10_000,
+    gamma: float,
+    termination: float,
+    max_iters: int,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Iterative policy evaluation for a fixed tabular policy π.
@@ -56,7 +58,7 @@ def policy_evaluation(
                     q_sa += prob * (reward + gamma * v_values[next_state] * (1 - done))
                 q_values[s, a] = q_sa
 
-            # Use only the action prescribed by the policy for V_pi(s)
+            #! Update V(s) using Q(s,a) given a DETERMINISTIC policy
             a_pi = int(policy[s])
             v_values[s] = q_values[s, a_pi]
 
@@ -71,7 +73,7 @@ def policy_evaluation(
 def policy_improvement(
     env_spec: TabularEnvSpec,
     values: np.ndarray,
-    gamma: float = 0.9,
+    gamma: float,
 ) -> np.ndarray:
     """
     Policy improvement step: given V(s), compute a greedy policy.
@@ -112,12 +114,12 @@ def policy_improvement(
 
 def policy_iteration(
     env_spec: TabularEnvSpec,
-    gamma: float = 0.9,
-    eval_termination: float = 1e-2,
-    max_policy_eval_iters: int = 10_000,
-    max_policy_iters: int = 100,
-    init_policy: Optional[np.ndarray] = None,
-    return_history: bool = False,
+    gamma: float,
+    eval_termination: float,
+    max_policy_eval_iters: int,
+    max_policy_iters: int,
+    init_policy: Optional[np.ndarray],
+    return_v_history: bool,
 ) -> Tuple[np.ndarray, np.ndarray, Optional[List[np.ndarray]]]:
     """
     Classic Policy Iteration:
@@ -139,7 +141,7 @@ def policy_iteration(
         Max number of policy improvement steps.
     init_policy : np.ndarray, optional
         Initial policy. If None, start with uniform zeros (e.g., always action 0).
-    return_history : bool
+    return_v_history : bool
         If True, also return a list of policies visited.
 
     Returns
@@ -148,8 +150,8 @@ def policy_iteration(
         Final policy (ideally optimal), shape [n_states].
     values : np.ndarray
         Corresponding state-value function V_pi, shape [n_states].
-    policy_history : list[np.ndarray] or None
-        If return_history=True, list of policies over iterations.
+    v_history : list[np.ndarray] or None
+        If return_v_history=True, list of V-values over iterations.
     """
     n_states = env_spec.n_states
     n_actions = env_spec.n_actions
@@ -160,12 +162,9 @@ def policy_iteration(
     else:
         policy = np.array(init_policy, dtype=int, copy=True)
 
-    policy_history: Optional[List[np.ndarray]] = [] if return_history else None
+    v_history: Optional[List[np.ndarray]] = [] if return_v_history else None
 
     for _ in range(max_policy_iters):
-        if return_history and policy_history is not None:
-            policy_history.append(policy.copy())
-
         # 1) Policy evaluation
         _, v_values = policy_evaluation(
             env_spec,
@@ -174,29 +173,30 @@ def policy_iteration(
             termination=eval_termination,
             max_iters=max_policy_eval_iters,
         )
+        if return_v_history and v_history is not None:
+            v_history.append(v_values.copy())
 
         # 2) Policy improvement
         new_policy = policy_improvement(env_spec, v_values, gamma=gamma)
 
-        # Check for convergence
+        # Check for convergence / stability
         if np.array_equal(new_policy, policy):
             policy = new_policy
             break
 
         policy = new_policy
 
-    # Final evaluation with the converged policy (optional but neat)
-    _, v_values = policy_evaluation(
-        env_spec,
-        policy,
-        gamma=gamma,
-        termination=eval_termination,
-        max_iters=max_policy_eval_iters,
-    )
+    #! Final evaluation with the converged policy
+    # _, v_values = policy_evaluation(
+    #     env_spec,
+    #     policy,
+    #     gamma=gamma,
+    #     termination=eval_termination,
+    #     max_iters=max_policy_eval_iters,
+    # )
 
-    if return_history:
-        return policy, v_values, policy_history
-
+    if return_v_history:
+        return policy, v_values, v_history
     return policy, v_values, None
 
 
@@ -239,10 +239,12 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
     print("="*60)
     
     # Extract config
-    gamma = config.get('gamma', 0.99)
-    eval_termination = config.get('eval_termination', 1e-2)
-    max_policy_eval_iters = config.get('max_policy_eval_iters', 10000)
-    max_policy_iters = config.get('max_policy_iters', 100)
+    gamma = config['gamma']
+    eval_termination = config['eval_termination']
+    max_policy_eval_iters = config['max_policy_eval_iters']
+    max_policy_iters = config['max_policy_iters']
+    init_policy = config.get('init_policy', None)
+    initial_state = config.get('initial_state', None)
     
     print(f"  Policy eval termination: {eval_termination}")
     print(f"  Max policy iterations: {max_policy_iters}")
@@ -251,18 +253,18 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
     start_time = time.time()
     
     # Run Policy Iteration
-    policy, V_values, policy_history = policy_iteration(
+    policy, V_values, v_history = policy_iteration(
         env_spec,
         gamma=gamma,
         eval_termination=eval_termination,
         max_policy_eval_iters=max_policy_eval_iters,
         max_policy_iters=max_policy_iters,
-        return_history=True
+        init_policy=init_policy,
+        return_v_history=True
     )
     
     elapsed_time = time.time() - start_time
     
-    # Compute Q-values for final policy
     Q_values, _ = policy_evaluation(
         env_spec,
         policy,
@@ -272,38 +274,36 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
     )
     
     metrics = {
-        'algorithm': 'policy_iteration',
         'training_time': elapsed_time,
-        'converged_iterations': len(policy_history) if policy_history else 0,
+        'converged_iterations': len(v_history),
         'final_mean_value': float(np.mean(V_values)),
-        'final_mean_q': float(np.mean(Q_values)),
+        # 'final_mean_q': float(np.mean(Q_values)),
     }
     
-    # Log iteration progress if logger provided
-    if logger and policy_history is not None:
-        for i in range(1, len(policy_history)):
-            changes = np.sum(policy_history[i] != policy_history[i-1])
-            logger({'iteration': i, 'policy_changes': int(changes)}, step=i)
+    # Log the value function history
+    if logger and v_history is not None:
+        for i in range(1, len(v_history)):
+            logger({'mean_v_value': float(np.mean(v_history[i]))}, step=i)
+            
     
-    if config.get('eval_episodes', 0) > 0 and env is not None:
-        n_episodes = config.get('eval_episodes', 100)
-        max_steps = config.get('max_steps', 200)
+    if config['eval_episodes'] > 0 and env is not None:
+        n_episodes = config['eval_episodes']
+        max_steps = config['max_steps']
         
-        avg_return, var_return, success_rate, _, avg_steps, var_steps = evaluate_policy_monte_carlo(
+        episodes_return, avg_return, var_return, success_rate, _, avg_steps, var_steps = evaluate_policy_monte_carlo(
             env,
             env_spec,
             policy,
             n_episodes=n_episodes,
             gamma=gamma,
-            max_steps=max_steps
+            max_steps=max_steps,
+            initial_state=initial_state
         )
         
         metrics.update({
             'mc_avg_return': float(avg_return),
             'mc_var_return': float(var_return),
             'mc_success_rate': float(success_rate),
-            'mc_avg_steps': float(avg_steps),
-            'mc_var_steps': float(var_steps),
         })
     
     # Final logging
@@ -313,7 +313,7 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
     print(f"\nConverged in {metrics['converged_iterations']} iterations")
     print(f"Training time: {elapsed_time:.2f}s")
     print(f"Mean V: {metrics['final_mean_value']:.3f}")
-    print(f"Mean Q: {metrics['final_mean_q']:.3f}")
+    # print(f"Mean Q: {metrics['final_mean_q']:.3f}")
     
     return {
         'policy': policy,

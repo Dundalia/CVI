@@ -6,6 +6,7 @@ from typing import Tuple, List, Optional
 import numpy as np
 import gymnasium as gym
 from cvi_rl.envs.base import TabularEnvSpec
+from tqdm import tqdm
 
 
 def run_episode_with_policy(
@@ -139,7 +140,7 @@ def evaluate_policy_monte_carlo(
     successes: List[bool] = []
     steps_list: List[int] = []
 
-    for _ in range(n_episodes):
+    for _ in tqdm(range(n_episodes), desc="MC Evaluation"):
         disc_return, success, steps = run_episode_with_policy(
             env,
             env_spec,

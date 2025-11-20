@@ -4,10 +4,14 @@ env:
   kwargs: {}
 
 training:
-  algorithm: mc
+  algorithm: pi
   
-  mc:
+  pi:
     module: cvi_rl.algorithms.tabular_pi
     function: run_policy_iteration
     n_episodes: 20000
     max_steps: 200
+    eval_episodes: 100
+    eval_termination: 1e-6
+    max_policy_iters: 1000
+    max_policy_eval_iters: 10000

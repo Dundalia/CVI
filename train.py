@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import sys
 from typing import Dict, Any
+import datetime
 
 import yaml
 
@@ -121,9 +122,14 @@ Examples:
     logger_func = None
     
     if WANDB_AVAILABLE and logger_config.get('do', {}).get('online', False):
+        run_name = logger_config.get('run_name', None)
+        if run_name:
+            date_time = datetime.datetime.now().strftime("%d/%m-%H:%M:%S")
+            run_name = f"{run_name} {date_time}"
+        
         wandb_run = wandb.init(
             project=logger_config.get('project_name', 'CVI-RL'),
-            name=logger_config.get('run_name', None),
+            name=run_name,
             config=config,
             tags=logger_config.get('tags', []),
             reinit=True
@@ -168,6 +174,9 @@ Examples:
         
         # Run training
         results = train_func(env_spec, env, algo_config, logger_func)
+        
+        if WANDB_AVAILABLE and wandb_run is not None:
+            wandb.summary.update(results['metrics'])
         
         print("\n" + "="*60)
         print("Training completed successfully!")
