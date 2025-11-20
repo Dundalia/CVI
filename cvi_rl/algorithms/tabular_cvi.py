@@ -6,6 +6,10 @@ from typing import Tuple, Optional
 
 import numpy as np
 
+import time
+
+from cvi_rl.algorithms.mc import evaluate_policy_monte_carlo 
+
 from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
 from cvi_rl.cf.grids import make_omega_grid, GridStrategy
 from cvi_rl.cf.processing import (
@@ -19,6 +23,7 @@ from cvi_rl.cf.processing import (
     interpolate_pchip,
     interpolate_lanczos
 )
+from tqdm import tqdm
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +218,7 @@ def cvi_policy_evaluation(
             V[s] = reward_cf_table[s] * exp_next
             max_delta = max(max_delta, np.max(np.abs(V[s] - V_prev[s])))
 
-        if max_delta < eps:
+        if max_delta < float(eps):
             break
 
     if return_omegas:
@@ -363,3 +368,93 @@ def collapse_q_cf_to_scalar_mean(
             Q_mean[s, a] = val
 
     return Q_mean
+
+def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
+    """
+    Run CVI as a value iteration loop: evaluate V_cf → collapse to Q → greedy policy → repeat.
+    Includes MC evaluation for metrics, like in PI.
+    """
+    
+    gamma = config['gamma']
+    grid_strategy = config['grid_strategy']
+    W = config['W']
+    K = config['K']
+    interp_method = config['interp_method']
+    collapse_method = config['collapse_method']
+    eval_termination = config['eval_termination']  # For CF convergence
+    max_iters = config['max_iters']  # Max VI iterations
+    eval_episodes = config['eval_episodes']  # For final MC eval
+    max_steps = config['max_steps']  # Max steps per episode
+    initial_state = config.get('initial_state', None)
+    
+    print(f"Running CVI Value Iteration: {grid_strategy} grid, K={K}, W={W}")
+    
+    n_states = env_spec.n_states
+    start_time = time.time()
+    
+    policy = np.random.randint(0, env_spec.n_actions, size=n_states)
+    v_history = []
+    
+    for iter_num in tqdm(range(max_iters), desc="CVI Value Iteration"):
+        policy_prev = policy.copy()
+        
+        # 1) Evaluate V_cf for current policy
+        V_cf, omegas = cvi_policy_evaluation(
+            env_spec, policy, gamma=gamma,
+            grid_strategy=grid_strategy, W=W, K=K,
+            interp_method=interp_method, eps=eval_termination
+        )
+        
+        # 2) Compute Q_cf from V_cf
+        Q_cf = cvi_action_evaluation_from_V(
+            env_spec, V_cf, omegas, gamma=gamma, interp_method=interp_method
+        )
+        
+        # 3) Collapse Q_cf to scalar Q
+        Q_scalar = collapse_q_cf_to_scalar_mean(omegas, Q_cf, method=collapse_method)
+        
+        # 4) Greedy policy improvement
+        policy = np.argmax(Q_scalar, axis=1)
+        mean_v = np.mean(Q_scalar)  
+        v_history.append(mean_v)
+        
+        if logger:
+            logger({'mean_v_value': float(mean_v)}, step=iter_num + 1)
+        
+        # Check convergence (policy stable)
+        if np.array_equal(policy, policy_prev):
+            print(f"Converged at iteration {iter_num + 1}")
+            break
+    
+    elapsed_time = time.time() - start_time
+    
+    # Final MC evaluation
+    if eval_episodes > 0 and env is not None:
+        avg_return, var_return, success_rate, _, avg_steps, _ = evaluate_policy_monte_carlo(
+            env, env_spec, policy, n_episodes=eval_episodes, gamma=gamma, max_steps=max_steps, initial_state=initial_state 
+        )
+        mc_metrics = {
+            'mc_avg_return': float(avg_return),
+            'mc_success_rate': float(success_rate),
+            # 'mc_var_return': float(var_return),
+        }
+    else:
+        mc_metrics = {}
+    
+    metrics = {
+        'training_time': elapsed_time,
+        'converged_iterations': len(v_history),
+        'final_mean_value': float(np.mean(Q_scalar)),
+        **mc_metrics
+    }
+    
+    if logger:
+        logger(metrics) 
+    
+    return {
+        'policy': policy,
+        'V_cf': V_cf,
+        'Q_scalar': Q_scalar,
+        'omegas': omegas,
+        'metrics': metrics
+    }

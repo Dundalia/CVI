@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Tuple, Optional, List
 import numpy as np
 from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
+from tqdm import tqdm
 
 
 def policy_evaluation(
@@ -164,7 +165,7 @@ def policy_iteration(
 
     v_history: Optional[List[np.ndarray]] = [] if return_v_history else None
 
-    for _ in range(max_policy_iters):
+    for _ in tqdm(range(max_policy_iters), desc="Policy Iteration"):
         # 1) Policy evaluation
         _, v_values = policy_evaluation(
             env_spec,
@@ -290,7 +291,7 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
         n_episodes = config['eval_episodes']
         max_steps = config['max_steps']
         
-        episodes_return, avg_return, var_return, success_rate, _, avg_steps, var_steps = evaluate_policy_monte_carlo(
+        avg_return, var_return, success_rate, _, avg_steps, var_steps = evaluate_policy_monte_carlo(
             env,
             env_spec,
             policy,
@@ -302,8 +303,8 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
         
         metrics.update({
             'mc_avg_return': float(avg_return),
-            'mc_var_return': float(var_return),
             'mc_success_rate': float(success_rate),
+            # 'mc_var_return': float(var_return),
         })
     
     # Final logging

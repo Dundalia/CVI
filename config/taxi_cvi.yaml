@@ -1,0 +1,20 @@
+env:
+  name: taxi
+  gamma: 0.99
+  kwargs: {}
+
+training:
+  algorithm: cvi
+  
+  cvi: 
+    module: cvi_rl.algorithms.tabular_cvi
+    function: run_cvi
+    grid_strategy: piecewise_centered  # Tuned: Best grid construction
+    W: 20.0  # Tuned: Best frequency range [-W, W]
+    K: 128  # Tuned: Best number of grid points
+    interp_method: polar  # Tuned: Best interpolation method
+    collapse_method: gaussian  # Tuned: Best collapse method
+    eval_termination: 1e-6  # Shared: Convergence threshold
+    max_iters: 50  # CVI-specific: Max VI iterations
+    eval_episodes: 100  # Shared: Episodes for MC evaluation
+    max_steps: 200  # Shared: Max steps per MC episode

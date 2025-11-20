@@ -1,7 +1,9 @@
 env:
-  name: taxi
+  name: frozenlake-8x8
   gamma: 0.99
-  kwargs: {}
+  kwargs:
+    map_name: "8x8"
+    is_slippery: true
 
 training:
   algorithm: pi

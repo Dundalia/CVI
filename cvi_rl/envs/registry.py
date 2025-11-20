@@ -36,24 +36,16 @@ def make_env(name: str, **kwargs: Any) -> Tuple[TabularEnvSpec, gym.Env]:
     if name in {"taxi", "taxi-v3"}:
         return make_taxi_env(**kwargs)
 
-    # Gridworld / FrozenLake variants
-    if name in {"gridworld", "frozenlake-4x4"}:
-        # default: small deterministic gridworld
-        return make_gridworld_env(map_name="4x4", **kwargs)
-
-    if name in {"frozenlake-8x8"}:
-        return make_gridworld_env(map_name="8x8", **kwargs)
-
-    # If user passes a full env_id we don't recognize as a shortcut:
-    #   e.g., make_env("FrozenLake-v1", map_name="4x4")
+    # Handle all FrozenLake variants dynamically
     if name.startswith("frozenlake"):
-        # Try to parse map_name from name if provided, else fall back to kwargs
-        # Example: "frozenlake-4x4-slip"
+        # Parse map_name from name or kwargs
         parts = name.split("-")
-        map_name = "4x4"
+        map_name = "4x4"  # default
         if len(parts) >= 2:
             map_name = parts[1]
-        is_slippery = "slip" in parts or kwargs.get("is_slippery", False)
+        # Allow override from kwargs, but avoid conflict
+        map_name = kwargs.pop('map_name', map_name)
+        is_slippery = "slip" in parts or kwargs.pop('is_slippery', False)
         return make_gridworld_env(map_name=map_name, is_slippery=is_slippery, **kwargs)
 
     raise ValueError(f"Unknown environment name: {name!r}")

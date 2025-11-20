@@ -163,7 +163,7 @@ def evaluate_policy_monte_carlo(
     avg_steps = float(np.mean(steps_arr))
     var_steps = float(np.var(steps_arr))
 
-    return episodes_return, avg_return, var_return, success_rate, returns, avg_steps, var_steps
+    return avg_return, var_return, success_rate, returns, avg_steps, var_steps
 
 
 def run_monte_carlo(env_spec: TabularEnvSpec, env: gym.Env, config: dict, logger=None):
