@@ -12,9 +12,9 @@ def run_episode_with_policy(
     env: gym.Env,
     env_spec: TabularEnvSpec,
     policy: np.ndarray,
-    initial_state: Optional[int] = None,
-    gamma: float = 0.9,
-    max_steps: int = 200,
+    initial_state: Optional[int],
+    gamma: float,
+    max_steps: int,
 ) -> Tuple[float, bool, int]:
     """
     Run a single episode following a given tabular policy.
@@ -100,10 +100,10 @@ def evaluate_policy_monte_carlo(
     env: gym.Env,
     env_spec: TabularEnvSpec,
     policy: np.ndarray,
-    initial_state: Optional[int] = None,
-    n_episodes: int = 100,
-    gamma: float = 0.99,
-    max_steps: int = 200,
+    initial_state: Optional[int],
+    n_episodes: int,
+    gamma: float,
+    max_steps: int,
 ):
     """
     Monte Carlo evaluation of a policy on a tabular environment.
@@ -127,6 +127,7 @@ def evaluate_policy_monte_carlo(
 
     Returns
     -------
+    episodes_return: [float]
     avg_return : float
     var_return : float
     success_rate : float
@@ -151,14 +152,99 @@ def evaluate_policy_monte_carlo(
         successes.append(success)
         steps_list.append(steps)
 
-    returns_arr = np.array(returns, dtype=float)
+    episodes_return = np.array(returns, dtype=float)
     steps_arr = np.array(steps_list, dtype=float)
     successes_arr = np.array(successes, dtype=float)
 
-    avg_return = float(np.mean(returns_arr))
-    var_return = float(np.var(returns_arr))
+    avg_return = float(np.mean(episodes_return))
+    var_return = float(np.var(episodes_return))
     success_rate = float(np.mean(successes_arr))
     avg_steps = float(np.mean(steps_arr))
     var_steps = float(np.var(steps_arr))
 
-    return avg_return, var_return, success_rate, returns, avg_steps, var_steps
+    return episodes_return, avg_return, var_return, success_rate, returns, avg_steps, var_steps
+
+
+def run_monte_carlo(env_spec: TabularEnvSpec, env: gym.Env, config: dict, logger=None):
+    """
+    Train (evaluate) a random policy using Monte Carlo sampling.
+    
+    Parameters
+    ----------
+    env_spec : TabularEnvSpec
+        Tabular environment specification.
+    env : gym.Env
+        Gymnasium environment instance.
+    config : dict
+        Training configuration with keys:
+        - gamma: float (discount factor)
+        - n_episodes: int (number of episodes)
+        - max_steps: int (max steps per episode)
+    logger : callable, optional
+        Function to log metrics, signature: logger(metrics_dict, step=None)
+    
+    Returns
+    -------
+    results : dict
+        Dictionary containing:
+        - policy: Random policy used
+        - metrics: Performance metrics
+        - returns: List of episode returns
+    """
+    import time
+    
+    print("\n" + "="*60)
+    print("Running Monte Carlo Evaluation")
+    print("="*60)
+    
+    # Random policy
+    policy = np.random.randint(0, env_spec.n_actions, size=env_spec.n_states)
+    
+    # Extract config
+    gamma = config.get('gamma', 0.99)
+    n_episodes = config.get('n_episodes', 1000)
+    max_steps = config.get('max_steps', 200)
+    
+    print(f"  Episodes: {n_episodes}")
+    print(f"  Max steps: {max_steps}")
+    print(f"  Gamma: {gamma}")
+    
+    start_time = time.time()
+    
+    episodes_return, avg_return, var_return, success_rate, returns, avg_steps, var_steps = evaluate_policy_monte_carlo(
+        env,
+        env_spec,
+        policy,
+        initial_state=None,
+        n_episodes=n_episodes,
+        gamma=gamma,
+        max_steps=max_steps
+    )
+    
+    elapsed_time = time.time() - start_time
+    
+    metrics = {
+        'algorithm': 'monte_carlo',
+        'n_episodes': n_episodes,
+        'training_time': elapsed_time,
+        'avg_return': avg_return,
+        'var_return': var_return,
+        'success_rate': success_rate,
+        'avg_steps': avg_steps,
+        'var_steps': var_steps,
+        'episodes_return': episodes_return.tolist(),
+    }
+    
+    if logger:
+        logger(metrics)
+    
+    print(f"\nAvg Return: {avg_return:.3f}")
+    print(f"Success Rate: {success_rate:.2%}")
+    print(f"Avg Steps: {avg_steps:.1f}")
+    print(f"Training time: {elapsed_time:.2f}s")
+    
+    return {
+        'policy': policy,
+        'metrics': metrics,
+        'returns': returns
+    }

@@ -62,7 +62,7 @@ def policy_evaluation(
 
             delta = max(delta, abs(v_old - v_values[s]))
 
-        if delta < termination:
+        if delta < float(termination):
             break
 
     return q_values, v_values
@@ -198,3 +198,126 @@ def policy_iteration(
         return policy, v_values, policy_history
 
     return policy, v_values, None
+
+
+def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=None):
+    """
+    Run using Policy Iteration algorithm.
+    
+    Parameters
+    ----------
+    env_spec : TabularEnvSpec
+        Tabular environment specification.
+    env : gym.Env
+        Gymnasium environment instance (for MC evaluation).
+    config : dict
+        Training configuration with keys:
+        - gamma: float (discount factor)
+        - eval_termination: float (convergence threshold for policy evaluation)
+        - max_policy_eval_iters: int (max iterations per policy evaluation)
+        - max_policy_iters: int (max policy improvement iterations)
+        - eval_episodes: int (episodes for MC evaluation, optional)
+        - max_steps: int (max steps per episode for MC, optional)
+    logger : callable, optional
+        Function to log metrics, signature: logger(metrics_dict, step=None)
+    
+    Returns
+    -------
+    results : dict
+        Dictionary containing:
+        - policy: Converged policy
+        - values: State values V
+        - Q_values: Action values Q
+        - metrics: Performance metrics
+    """
+    import time
+    import numpy as np
+    from .mc import evaluate_policy_monte_carlo
+    
+    print("\n" + "="*60)
+    print("Running Policy Iteration")
+    print("="*60)
+    
+    # Extract config
+    gamma = config.get('gamma', 0.99)
+    eval_termination = config.get('eval_termination', 1e-2)
+    max_policy_eval_iters = config.get('max_policy_eval_iters', 10000)
+    max_policy_iters = config.get('max_policy_iters', 100)
+    
+    print(f"  Policy eval termination: {eval_termination}")
+    print(f"  Max policy iterations: {max_policy_iters}")
+    print(f"  Gamma: {gamma}")
+    
+    start_time = time.time()
+    
+    # Run Policy Iteration
+    policy, V_values, policy_history = policy_iteration(
+        env_spec,
+        gamma=gamma,
+        eval_termination=eval_termination,
+        max_policy_eval_iters=max_policy_eval_iters,
+        max_policy_iters=max_policy_iters,
+        return_history=True
+    )
+    
+    elapsed_time = time.time() - start_time
+    
+    # Compute Q-values for final policy
+    Q_values, _ = policy_evaluation(
+        env_spec,
+        policy,
+        gamma=gamma,
+        termination=eval_termination,
+        max_iters=max_policy_eval_iters
+    )
+    
+    metrics = {
+        'algorithm': 'policy_iteration',
+        'training_time': elapsed_time,
+        'converged_iterations': len(policy_history) if policy_history else 0,
+        'final_mean_value': float(np.mean(V_values)),
+        'final_mean_q': float(np.mean(Q_values)),
+    }
+    
+    # Log iteration progress if logger provided
+    if logger and policy_history is not None:
+        for i in range(1, len(policy_history)):
+            changes = np.sum(policy_history[i] != policy_history[i-1])
+            logger({'iteration': i, 'policy_changes': int(changes)}, step=i)
+    
+    if config.get('eval_episodes', 0) > 0 and env is not None:
+        n_episodes = config.get('eval_episodes', 100)
+        max_steps = config.get('max_steps', 200)
+        
+        avg_return, var_return, success_rate, _, avg_steps, var_steps = evaluate_policy_monte_carlo(
+            env,
+            env_spec,
+            policy,
+            n_episodes=n_episodes,
+            gamma=gamma,
+            max_steps=max_steps
+        )
+        
+        metrics.update({
+            'mc_avg_return': float(avg_return),
+            'mc_var_return': float(var_return),
+            'mc_success_rate': float(success_rate),
+            'mc_avg_steps': float(avg_steps),
+            'mc_var_steps': float(var_steps),
+        })
+    
+    # Final logging
+    if logger:
+        logger(metrics)
+    
+    print(f"\nConverged in {metrics['converged_iterations']} iterations")
+    print(f"Training time: {elapsed_time:.2f}s")
+    print(f"Mean V: {metrics['final_mean_value']:.3f}")
+    print(f"Mean Q: {metrics['final_mean_q']:.3f}")
+    
+    return {
+        'policy': policy,
+        'values': V_values,
+        'Q_values': Q_values,
+        'metrics': metrics
+    }

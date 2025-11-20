@@ -69,3 +69,4 @@ checkpoints/
 *.npy
 *.npz
 
+wandb/

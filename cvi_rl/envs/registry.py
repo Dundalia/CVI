@@ -39,10 +39,10 @@ def make_env(name: str, **kwargs: Any) -> Tuple[TabularEnvSpec, gym.Env]:
     # Gridworld / FrozenLake variants
     if name in {"gridworld", "frozenlake-4x4"}:
         # default: small deterministic gridworld
-        return make_gridworld_env(map_name="4x4", is_slippery=False, **kwargs)
+        return make_gridworld_env(map_name="4x4", **kwargs)
 
     if name in {"frozenlake-8x8"}:
-        return make_gridworld_env(map_name="8x8", is_slippery=False, **kwargs)
+        return make_gridworld_env(map_name="8x8", **kwargs)
 
     # If user passes a full env_id we don't recognize as a shortcut:
     #   e.g., make_env("FrozenLake-v1", map_name="4x4")

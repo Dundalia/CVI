@@ -3,12 +3,18 @@ numpy>=1.24.0
 scipy>=1.10.0
 gymnasium>=0.29.0
 
+# Configuration management
+pyyaml>=6.0
+
 # Visualization and analysis
 matplotlib>=3.7.0
 pandas>=2.0.0
 
 # Progress bars and utilities
 tqdm>=4.65.0
+
+# Logging and experiment tracking
+wandb>=0.15.0
 
 # Optional: Jupyter notebook support
 jupyter>=1.0.0

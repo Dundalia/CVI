@@ -1,0 +1,13 @@
+env:
+  name: taxi
+  gamma: 0.99
+  kwargs: {}
+
+training:
+  algorithm: mc
+  
+  mc:
+    module: cvi_rl.algorithms.tabular_pi
+    function: run_policy_iteration
+    n_episodes: 20000
+    max_steps: 200
