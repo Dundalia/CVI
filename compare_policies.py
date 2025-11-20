@@ -30,10 +30,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Compare two policies saved as .npy files',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python compare_policies.py pi_policy.npy cvi_policy.npy
-        """
+        epilog=""" Examples: python compare_policies.py pi_policy.npy cvi_policy.npy"""
     )
     
     parser.add_argument('policy1', help='Path to first policy .npy file')
@@ -41,11 +38,9 @@ Examples:
     
     args = parser.parse_args()
     
-    # Load policies
     policy1 = load_policy(args.policy1)
     policy2 = load_policy(args.policy2)
     
-    # Compare
     percentage_differing = compare_policies(policy1, policy2)
     
     print(f"Policies comparison:")
