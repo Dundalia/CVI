@@ -36,7 +36,7 @@ def make_cliffwalking_env(**kwargs) -> tuple[TabularEnvSpec, gym.Env]:
         n_states=nS,
         n_actions=nA,
         P=P,  
-        initial_state=36,
+        initial_state=0,  # Standardized initial state for fair comparison
         terminal_states=None,  # CliffWalking termination encoded via done in P
         name="cliffwalking",
     )

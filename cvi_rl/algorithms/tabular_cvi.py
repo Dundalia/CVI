@@ -18,10 +18,7 @@ from cvi_rl.cf.processing import (
     estimate_mean_ls,
     estimate_mean_fft,
     estimate_mean_gaussian,
-    interpolate_linear,
-    interpolate_polar,
-    interpolate_pchip,
-    interpolate_lanczos
+    interpolate_cf,
 )
 from tqdm import tqdm
 
@@ -30,7 +27,7 @@ from tqdm import tqdm
 # Reward CFs
 # ---------------------------------------------------------------------------
 
-def compute_reward_cf_table(
+def compute_immediate_reward_cf_state_frequency(
     env_spec: TabularEnvSpec,
     policy: np.ndarray,
     omegas: np.ndarray,
@@ -39,12 +36,12 @@ def compute_reward_cf_table(
     Compute reward characteristic functions per state under a fixed policy π.
 
     For each state s, we consider the one-step reward distribution R(s,π(s)):
-      φ_R(s, ω) = E[exp(i ω R) | s, a=π(s)]
+      CF_R(s, ω) = E[exp(i ω R) | s, a=π(s)], see equation (3) CVI paper.
 
     For tabular MDPs with transition model P[s][a] = (prob, next_state, reward, done),
     this becomes:
 
-      φ_R(s, ω) = sum_{(prob, *, r, *)} prob * exp(i ω r)
+      CF_R(s, ω) = sum_{(prob, *, r, *)} prob * exp(i ω r)
 
     Parameters
     ----------
@@ -59,8 +56,9 @@ def compute_reward_cf_table(
     -------
     reward_cf_table : np.ndarray
         Complex array of shape [n_states, K], where reward_cf_table[s, k]
-        is φ_R(s, ω_k).
+        is CF_R(s, ω_k).
     """
+    
     n_states = env_spec.n_states
     n_actions = env_spec.n_actions
     P: TransitionModel = env_spec.P
@@ -71,30 +69,28 @@ def compute_reward_cf_table(
             f"Policy length {policy.shape[0]} does not match env states {n_states}."
         )
 
-    reward_cf_table = np.zeros((n_states, K), dtype=complex)
+    immediate_reward_cf_table = np.zeros((n_states, K), dtype=complex)
 
     for s in range(n_states):
         a = int(policy[s])
         if not (0 <= a < n_actions):
             raise ValueError(f"Policy action {a} out of bounds for state {s}.")
-
-        cf_s = np.zeros(K, dtype=complex)
+        immediate_reward_cf_s = np.zeros(K, dtype=complex)
         for prob, _, reward, _ in P[s][a]:
-            cf_s += prob * np.exp(1j * omegas * reward)
+            immediate_reward_cf_s += prob * np.exp(1j * omegas * reward)
 
-        reward_cf_table[s] = cf_s
+        immediate_reward_cf_table[s] = immediate_reward_cf_s
+    return immediate_reward_cf_table # [n_states, K]
 
-    return reward_cf_table
 
-
-def compute_reward_cf_table_sa(
+def compute_immediate_reward_cf_state_action_frequency(
     env_spec: TabularEnvSpec,
     omegas: np.ndarray,
 ) -> np.ndarray:
     """
     Compute reward characteristic functions for every state-action pair:
 
-      φ_R(s,a,ω) = E[exp(i ω R) | s, a]
+      CF_R(s,a,ω) = E[exp(i ω R) | s, a]
 
     Parameters
     ----------
@@ -129,6 +125,8 @@ def compute_reward_cf_table_sa(
 # CVI policy evaluation: V_pi(s, ω)
 # ---------------------------------------------------------------------------
 
+
+#! I don't know if we shoud keep the default values... (I'd rather know I missed something)
 def cvi_policy_evaluation(
     env_spec: TabularEnvSpec,
     policy: np.ndarray,
@@ -147,17 +145,17 @@ def cvi_policy_evaluation(
     """
     Tabular Characteristic Value Iteration (CVI) for policy evaluation.
 
-    This computes the fixed point V(s, ω) ≈ φ_{G}(s, ω) where G is the
+    This computes the fixed point V(s, ω) ≈ CF_{G}(s, ω) where G is the
     discounted return under policy π:
 
-      G_π(s) = R_0 + γ R_1 + γ^2 R_2 + ...
+      G_π(s) = R_0 + gamma R_1 + gamma^2 R_2 + ...
 
     In the frequency domain, the Bellman equation becomes:
 
-      V(s, ω) = φ_R(s, ω) * E[V(S', γ ω) | s, a=π(s)]
+      V(s, ω) = CF_R(s, ω) * E[V(S', gamma ω) | s, a=π(s)]
 
     We approximate this on a finite ω-grid, using various interpolation methods
-    to evaluate V(s, γ ω) between grid points.
+    to evaluate V(s, gamma ω) between grid points.
     """
     n_states = env_spec.n_states
     P: TransitionModel = env_spec.P
@@ -177,8 +175,8 @@ def cvi_policy_evaluation(
     K = len(omegas)
     scaled_omegas = gamma * omegas
 
-    # 2) Precompute reward CF φ_R(s, ω)
-    reward_cf_table = compute_reward_cf_table(env_spec, policy, omegas)
+    # 2) Precompute reward CF_R(s, ω)
+    reward_cf_table = compute_immediate_reward_cf_state_frequency(env_spec, policy, omegas)
 
     # 3) Initialize V(s, ω) = 1 (CF of zero-return RV)
     V = np.ones((n_states, K), dtype=complex)
@@ -186,21 +184,12 @@ def cvi_policy_evaluation(
     for _ in range(max_iters):
         V_prev = V.copy()
 
-        # 3a) Compute V_prev(s, γ ω) via interpolation
-        V_scaled = np.zeros_like(V_prev)
-
+        # 3a) Compute V(s, gamma * ω) via interpolation necessary for L2 loss bootstrapping
+        V_cf_gamma = np.zeros_like(V_prev)
+        
         for s in range(n_states):
-            if interp_method == "linear":
-                V_scaled[s] = interpolate_linear(scaled_omegas, omegas, V_prev[s])
-            elif interp_method == "polar":
-                V_scaled[s] = interpolate_polar(scaled_omegas, omegas, V_prev[s])
-            elif interp_method == "pchip":
-                V_scaled[s] = interpolate_pchip(scaled_omegas, omegas, V_prev[s])
-            elif interp_method == "lanczos":
-                V_scaled[s] = interpolate_lanczos(scaled_omegas, omegas, V_prev[s], **interp_kwargs)
-            else:
-                raise ValueError(f"Unknown interpolation method: {interp_method}")
-
+            V_cf_gamma[s] = interpolate_cf(scaled_omegas, omegas, V_prev[s], interp_method, **interp_kwargs)
+        
         # 3b) Bellman update for each state
         max_delta = 0.0
 
@@ -208,14 +197,14 @@ def cvi_policy_evaluation(
             a = int(policy[s])
 
             # Expectation over next states under P(s,a)
-            exp_next = np.zeros(K, dtype=complex)
+            expectation_over_next_state = np.zeros(K, dtype=complex)
             for prob, next_state, _, done in P[s][a]:
                 if done:
-                    exp_next += prob * 1.0  # CF of zero future return
+                    expectation_over_next_state += prob * 1.0  #! Multiplying by 1 to make CF of zero future return
                 else:
-                    exp_next += prob * V_scaled[next_state]
+                    expectation_over_next_state += prob * V_cf_gamma[next_state]
 
-            V[s] = reward_cf_table[s] * exp_next
+            V[s] = reward_cf_table[s] * expectation_over_next_state
             max_delta = max(max_delta, np.max(np.abs(V[s] - V_prev[s])))
 
         if max_delta < float(eps):
@@ -244,10 +233,10 @@ def cvi_action_evaluation_from_V(
 
     We use the CF form of the Bellman equation for Q:
 
-      Q(s,a,ω) = φ_R(s,a,ω) * E[ V(S', γ ω) | s, a ]
+      Q(s,a,ω) = CF_R(s,a,ω) * E[ V(S', gamma ω) | s, a ]
 
     where:
-      - φ_R(s,a,ω) is the one-step reward CF
+      - CF_R(s,a,ω) is the one-step reward CF
       - V(s,ω) approximates the CF of the discounted return G starting at s
 
     Parameters
@@ -279,24 +268,15 @@ def cvi_action_evaluation_from_V(
             f"V_cf shape {V_cf.shape} incompatible with (n_states, K)=({n_states}, {K})."
         )
 
-    # 1) Reward CF φ_R(s,a,ω)
-    reward_cf_sa = compute_reward_cf_table_sa(env_spec, omegas)  # [S,A,K]
+    # 1) Reward CF CF_R(s,a,ω)
+    reward_cf_sa = compute_immediate_reward_cf_state_action_frequency(env_spec, omegas)  # [n_states, n_actions, K]
 
-    # 2) Interpolate V(s, γω) for all states
+    # 2) Compute V(s, gamma * ω) via interpolation necessary for L2 loss bootstrapping
     scaled_omegas = gamma * omegas
-    V_scaled = np.zeros_like(V_cf)
+    V_cf_gamma = np.zeros_like(V_cf)
 
     for s in range(n_states):
-        if interp_method == "linear":
-            V_scaled[s] = interpolate_linear(scaled_omegas, omegas, V_cf[s])
-        elif interp_method == "polar":
-            V_scaled[s] = interpolate_polar(scaled_omegas, omegas, V_cf[s])
-        elif interp_method == "pchip":
-            V_scaled[s] = interpolate_pchip(scaled_omegas, omegas, V_cf[s])
-        elif interp_method == "lanczos":
-            V_scaled[s] = interpolate_lanczos(scaled_omegas, omegas, V_cf[s], **interp_kwargs)
-        else:
-            raise ValueError(f"Unknown interpolation method: {interp_method}")
+        V_cf_gamma[s] = interpolate_cf(scaled_omegas, omegas, V_cf[s], interp_method, **interp_kwargs)
 
     # 3) Build Q_cf(s,a,ω) via Bellman equation in CF-domain
     Q_cf = np.zeros((n_states, n_actions, K), dtype=complex)
@@ -306,9 +286,9 @@ def cvi_action_evaluation_from_V(
             exp_next = np.zeros(K, dtype=complex)
             for prob, next_state, _, done in P[s][a]:
                 if done:
-                    exp_next += prob * 1.0
+                    exp_next += prob * 1.0 #! Multiplying by 1 to make CF of zero future return
                 else:
-                    exp_next += prob * V_scaled[next_state]
+                    exp_next += prob * V_cf_gamma[next_state]
 
             Q_cf[s, a] = reward_cf_sa[s, a] * exp_next
 
@@ -415,9 +395,9 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
         
         # 4) Greedy policy improvement
         policy = np.argmax(Q_scalar, axis=1)
-        mean_v = np.mean(Q_scalar)  
+        mean_v = np.mean(np.max(Q_scalar, axis=1))  # Mean of state values (max Q per state)
         v_history.append(mean_v)
-        
+
         if logger:
             logger({'mean_v_value': float(mean_v)}, step=iter_num + 1)
         

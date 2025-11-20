@@ -279,3 +279,18 @@ def interpolate_lanczos(
         output[mask] += weights * phi[neighbor_idx[mask]]
         
     return output
+
+def interpolate_cf(scaled_omegas: np.ndarray, omegas: np.ndarray, cf: np.ndarray, method: InterpolationMethod, **kwargs) -> np.ndarray:
+    """
+    Interpolate a characteristic function cf from omegas to scaled_omegas using the specified method.
+    """
+    if method == "linear":
+        return interpolate_linear(scaled_omegas, omegas, cf)
+    elif method == "polar":
+        return interpolate_polar(scaled_omegas, omegas, cf)
+    elif method == "pchip":
+        return interpolate_pchip(scaled_omegas, omegas, cf)
+    elif method == "lanczos":
+        return interpolate_lanczos(scaled_omegas, omegas, cf, **kwargs)
+    else:
+        raise ValueError(f"Unknown interpolation method: {method}")

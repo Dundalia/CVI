@@ -12,6 +12,7 @@ from typing import Dict, Any
 import datetime
 
 import yaml
+import numpy as np
 
 try:
     import wandb
@@ -106,6 +107,10 @@ Examples:
     except Exception as e:
         print(f"Error loading config: {e}")
         return 1
+    
+    # Set numpy random seed for reproducibility
+    seed = 0
+    np.random.seed(seed)
     
     # Extract sections
     env_config = config.get('env', {})
