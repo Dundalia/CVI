@@ -83,11 +83,17 @@ def estimate_mean_fft(
     
     # Construct corresponding x-axis (returns)
     K = len(omegas)
-    # xs = np.fft.fftfreq(K, d=d_omega / (2 * np.pi))
-    # Usually fftfreq gives [0, 1, ..., -1], need to match ifft output
-    # The ifft result corresponds to time/space domain
-    
     xs = np.fft.fftfreq(K, d=d_omega / (2 * np.pi))
+    
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(8, 5))
+    plt.plot(xs, pdf_real, 'o-', markersize=2)
+    plt.xlabel('Returns (x)')
+    plt.ylabel('PDF p_G(x)')
+    plt.title('Return Distribution from Inverse FFT of CF')
+    plt.grid(True)
+    # plt.show()
+
     
     # Compute mean
     mean_est = np.sum(xs * pdf_real)
@@ -294,3 +300,21 @@ def interpolate_cf(scaled_omegas: np.ndarray, omegas: np.ndarray, cf: np.ndarray
         return interpolate_lanczos(scaled_omegas, omegas, cf, **kwargs)
     else:
         raise ValueError(f"Unknown interpolation method: {method}")
+    
+def estimate_mean_from_cf(
+    omegas: np.ndarray,
+    cf: np.ndarray,
+    method: CollapseMethod,
+    **kwargs
+) -> float:
+    """
+    Estimate the mean E[G] from the characteristic function cf using the specified collapse method.
+    """
+    if method == "ls":
+        return estimate_mean_ls(omegas, cf, **kwargs)
+    elif method == "fft":
+        return estimate_mean_fft(omegas, cf)
+    elif method == "gaussian":
+        return estimate_mean_gaussian(omegas, cf, **kwargs)
+    else:
+        raise ValueError(f"Unknown collapse method: {method}")

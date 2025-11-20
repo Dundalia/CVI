@@ -15,10 +15,8 @@ from cvi_rl.cf.grids import make_omega_grid, GridStrategy
 from cvi_rl.cf.processing import (
     CollapseMethod,
     InterpolationMethod,
-    estimate_mean_ls,
-    estimate_mean_fft,
-    estimate_mean_gaussian,
     interpolate_cf,
+    estimate_mean_from_cf,
 )
 from tqdm import tqdm
 
@@ -302,7 +300,7 @@ def cvi_action_evaluation_from_V(
 def collapse_q_cf_to_scalar_mean(
     omegas: np.ndarray,
     Q_cf: np.ndarray,
-    method: CollapseMethod = "ls",
+    method: CollapseMethod,
     **kwargs,
 ) -> np.ndarray:
     """
@@ -334,17 +332,8 @@ def collapse_q_cf_to_scalar_mean(
 
     for s in range(n_states):
         for a in range(n_actions):
-            phi_sa = Q_cf[s, a]
-            
-            if method == "ls":
-                val = estimate_mean_ls(omegas, phi_sa, **kwargs)
-            elif method == "fft":
-                val = estimate_mean_fft(omegas, phi_sa)
-            elif method == "gaussian":
-                val = estimate_mean_gaussian(omegas, phi_sa, **kwargs)
-            else:
-                raise ValueError(f"Unknown collapse method: {method}")
-                
+            Q_cf_sa = Q_cf[s, a]
+            val = estimate_mean_from_cf(omegas, Q_cf_sa, method, **kwargs) 
             Q_mean[s, a] = val
 
     return Q_mean
@@ -391,6 +380,7 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
         )
         
         # 3) Collapse Q_cf to scalar Q
+        #! This function can be an error source
         Q_scalar = collapse_q_cf_to_scalar_mean(omegas, Q_cf, method=collapse_method)
         
         # 4) Greedy policy improvement

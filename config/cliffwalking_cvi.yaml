@@ -14,7 +14,7 @@ training:
     W: 20.0  # CVI-specific: Frequency range [-W, W]
     K: 128  # CVI-specific: Number of grid points
     interp_method: polar  # CVI-specific: Interpolation method
-    collapse_method: gaussian  # CVI-specific: Collapse method
+    collapse_method: fft  # CVI-specific: Collapse method
     eval_termination: 1e-6  # Shared: Convergence threshold
     max_iters: 100  # CVI-specific: Max VI iterations (increased for harder env)
     eval_episodes: 100  # Shared: Episodes for MC evaluation
