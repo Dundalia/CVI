@@ -9,6 +9,7 @@ import gymnasium as gym
 from .base import TabularEnvSpec, TabularEnvFactory
 from .taxi import make_taxi_env
 from .gridworld import make_gridworld_env
+from .cliffwalking import make_cliffwalking_env
 
 
 def make_env(name: str, **kwargs: Any) -> Tuple[TabularEnvSpec, gym.Env]:
@@ -47,5 +48,9 @@ def make_env(name: str, **kwargs: Any) -> Tuple[TabularEnvSpec, gym.Env]:
         map_name = kwargs.pop('map_name', map_name)
         is_slippery = "slip" in parts or kwargs.pop('is_slippery', False)
         return make_gridworld_env(map_name=map_name, is_slippery=is_slippery, **kwargs)
+
+    # CliffWalking
+    if name == "cliffwalking":
+        return make_cliffwalking_env(**kwargs)
 
     raise ValueError(f"Unknown environment name: {name!r}")
