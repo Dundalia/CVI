@@ -202,6 +202,8 @@ def cvi_policy_evaluation(
                 else:
                     expectation_over_next_state += prob * V_cf_gamma[next_state]
 
+            # Time domain: V(s) = R + gamma * E[V(S')]
+            # Frequency domain: V(s,ω) = CF_R(s,ω) * E[V(S', gamma ω)]
             V[s] = reward_cf_table[s] * expectation_over_next_state
             max_delta = max(max_delta, np.max(np.abs(V[s] - V_prev[s])))
 
@@ -288,6 +290,8 @@ def cvi_action_evaluation_from_V(
                 else:
                     exp_next += prob * V_cf_gamma[next_state]
 
+            # Time domain: Q(s,a) = R + gamma * E[Q(s', a')]
+            # Frequency domain: Q(s,a,ω) = CF_R(s,a,ω) * E[Q(s', a' gamma ω)]
             Q_cf[s, a] = reward_cf_sa[s, a] * exp_next
 
     return Q_cf

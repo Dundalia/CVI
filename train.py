@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Training script for RL algorithms.
-Simplified version that delegates training logic to algorithm modules.
-"""
-
 from __future__ import annotations
 
 import argparse
