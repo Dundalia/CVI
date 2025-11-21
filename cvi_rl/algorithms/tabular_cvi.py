@@ -20,6 +20,7 @@ from cvi_rl.cf.processing import (
 )
 from tqdm import tqdm
 
+np.random.seed(0) #! has to be set differently
 
 # ---------------------------------------------------------------------------
 # Reward CFs
