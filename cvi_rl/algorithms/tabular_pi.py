@@ -157,11 +157,10 @@ def policy_iteration(
     n_states = env_spec.n_states
     n_actions = env_spec.n_actions
 
-    if init_policy is None:
-        # Start with a simple default: always take action 0
-        policy = np.zeros(n_states, dtype=int)
-    else:
+    if init_policy is not None:
         policy = np.array(init_policy, dtype=int, copy=True)
+    else:
+        policy = np.random.randint(0, env_spec.n_actions, size=n_states)
 
     v_history: Optional[List[np.ndarray]] = [] if return_v_history else None
 

@@ -1,0 +1,24 @@
+env:
+  name: frozenlake-8x8
+  gamma: 0.99
+  kwargs:
+    map_name: "8x8"
+    is_slippery: true
+
+seed: 0
+
+training:
+  algorithm: quantile
+  
+  quantile: 
+    module: cvi_rl.algorithms.tabular_quantile
+    function: run_quantile_vi
+    gamma: 0.99
+    
+    # Quantile Specifics
+    n_quantiles: 32  # Number of particles/quantiles to maintain
+    
+    eval_termination: 1e-6
+    max_iters: 200
+    eval_episodes: 100
+    max_steps: 200
