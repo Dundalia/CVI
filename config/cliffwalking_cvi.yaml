@@ -4,6 +4,8 @@ env:
   kwargs:
     is_slippery: true
 
+seed: 0
+
 training:
   algorithm: cvi
   

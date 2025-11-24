@@ -20,7 +20,6 @@ from cvi_rl.cf.processing import (
 )
 from tqdm import tqdm
 
-np.random.seed(0) #! has to be set differently
 
 # ---------------------------------------------------------------------------
 # Reward CFs
@@ -360,13 +359,19 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     eval_episodes = config['eval_episodes']  # For final MC eval
     max_steps = config['max_steps']  # Max steps per episode
     initial_state = config.get('initial_state', None)
+    init_policy = config.get('init_policy', None)
+    seed = config.get('seed', None)
     
     print(f"Running CVI Value Iteration: {grid_strategy} grid, K={K}, W={W}")
     
     n_states = env_spec.n_states
     start_time = time.time()
     
-    policy = np.random.randint(0, env_spec.n_actions, size=n_states)
+    if init_policy is not None:
+        policy = np.array(init_policy, dtype=int, copy=True)
+    else:
+        policy = np.random.randint(0, env_spec.n_actions, size=n_states)
+        
     v_history = []
     
     for iter_num in tqdm(range(max_iters), desc="CVI Value Iteration"):
@@ -406,7 +411,7 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     # Final MC evaluation
     if eval_episodes > 0 and env is not None:
         avg_return, var_return, success_rate, _, avg_steps, _ = evaluate_policy_monte_carlo(
-            env, env_spec, policy, n_episodes=eval_episodes, gamma=gamma, max_steps=max_steps, initial_state=initial_state 
+            env, env_spec, policy, n_episodes=eval_episodes, gamma=gamma, max_steps=max_steps, initial_state=initial_state, seed=seed
         )
         mc_metrics = {
             'mc_avg_return': float(avg_return),
@@ -419,7 +424,7 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     metrics = {
         'training_time': elapsed_time,
         'converged_iterations': len(v_history),
-        'final_mean_value': float(np.mean(Q_scalar)),
+        'final_mean_value': float(np.mean(np.max(Q_scalar, axis=1))),
         **mc_metrics
     }
     

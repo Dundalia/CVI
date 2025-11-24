@@ -246,6 +246,7 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
     max_policy_iters = config['max_policy_iters']
     init_policy = config.get('init_policy', None)
     initial_state = config.get('initial_state', None)
+    seed = config.get('seed', None)
     
     print(f"  Policy eval termination: {eval_termination}")
     print(f"  Max policy iterations: {max_policy_iters}")
@@ -298,7 +299,8 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
             n_episodes=n_episodes,
             gamma=gamma,
             max_steps=max_steps,
-            initial_state=initial_state
+            initial_state=initial_state,
+            seed=seed
         )
         
         metrics.update({

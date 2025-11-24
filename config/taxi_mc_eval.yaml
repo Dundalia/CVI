@@ -5,6 +5,8 @@ env:
   gamma: 0.99
   kwargs: {}
 
+seed: 0
+
 training:
   algorithm: mc
   

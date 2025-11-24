@@ -20,7 +20,8 @@ def compare_policies(policy1: np.ndarray, policy2: np.ndarray) -> float:
         sys.exit(1)
     
     n_states = len(policy1)
-    differing_states = np.sum(policy1 != policy2)
+    differing_indices = np.where(policy1 != policy2)[0]
+    differing_states = len(differing_indices)
     percentage_differing = (differing_states / n_states) * 100
     
     return percentage_differing

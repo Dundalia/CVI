@@ -7,6 +7,7 @@ import datetime
 
 import yaml
 import numpy as np
+import importlib
 
 try:
     import wandb
@@ -102,11 +103,11 @@ Examples:
         print(f"Error loading config: {e}")
         return 1
     
-    # Set numpy random seed for reproducibility
-    seed = 0
+    # Set random seed for reproducibility
+    seed = config.get('seed', 0)
     np.random.seed(seed)
+    print(f"Random seed set to: {seed}")
     
-    # Extract sections
     env_config = config.get('env', {})
     training_config = config.get('training', {})
     logger_config = config.get('logger', {})
@@ -116,7 +117,6 @@ Examples:
         print("Error: No algorithm specified in config (training.algorithm)")
         return 1
     
-    # Initialize W&B if configured
     wandb_run = None
     logger_func = None
     
@@ -138,21 +138,25 @@ Examples:
     else:
         print("W&B logging disabled")
     
-    # Initialize environment
     env_name = env_config.get('name', 'taxi')
     env_kwargs = env_config.get('kwargs', {})
     
     print(f"\nInitializing environment: {env_name}")
     env_spec, env = make_env(env_name, **env_kwargs)
     
+    #TODO: Remove redundant print statements
     print(f"  States: {env_spec.n_states}")
     print(f"  Actions: {env_spec.n_actions}")
     print(f"  Gamma: {env_config.get('gamma', 0.99)}")
     
-    # Get algorithm configuration
+
+    init_policy = np.random.randint(0, env_spec.n_actions, size=env_spec.n_states)
+    
     algo_config = training_config.get(algorithm, {})
     
-    # Get module and function paths from config
+    algo_config['init_policy'] = init_policy
+    algo_config['seed'] = seed
+    
     module_path = algo_config.get('module')
     function_name = algo_config.get('function')
     
@@ -161,58 +165,44 @@ Examples:
         print(f"Expected: training.{algorithm}.module and training.{algorithm}.function")
         return 1
     
-    # Add gamma to algo config
     algo_config['gamma'] = env_config.get('gamma', 0.99)
+        
+    module = importlib.import_module(module_path)
+    train_func = getattr(module, function_name)
     
-    # Import and run algorithm dynamically
-    try:
-        # Dynamic import
-        import importlib
-        module = importlib.import_module(module_path)
-        train_func = getattr(module, function_name)
+    results = train_func(env_spec, env, algo_config, logger_func)
+    
+    if WANDB_AVAILABLE and wandb_run is not None:
+        wandb.summary.update(results['metrics'])
+    
+    if 'policy' in results:
+        policy_filename = f"{algorithm}_{env_name}_policy.npy"
+        np.save(f"saved_policies/{policy_filename}", results['policy'])
+        print(f"Policy saved to saved_policies/{policy_filename}")
         
-        # Run training
-        results = train_func(env_spec, env, algo_config, logger_func)
+        if wandb_run is not None:
+            artifact = wandb.Artifact(f"{algorithm}_{env_name}_policy", type="policy")
+            artifact.add_file(f"saved_policies/{policy_filename}")
+            wandb_run.log_artifact(artifact)
+            print(f"Policy uploaded to W&B as artifact: {algorithm}_{env_name}_policy")
+    
+    print("\n" + "="*60)
+    print("Training completed successfully!")
+    print("="*60)
+    
+    if 'metrics' in results:
+        print("\nFinal Metrics:")
+        for key, value in results['metrics'].items():
+            if isinstance(value, (int, float)):
+                print(f"  {key}: {value}")
+                
+    if wandb_run:
+        wandb.finish()
+    if env:
+        env.close()
+    
+    return 0
         
-        if WANDB_AVAILABLE and wandb_run is not None:
-            wandb.summary.update(results['metrics'])
-        
-        # Save policy if available
-        if 'policy' in results:
-            policy_filename = f"{algorithm}_{env_name}_policy.npy"
-            np.save(f"saved_policies/{policy_filename}", results['policy'])
-            print(f"Policy saved to saved_policies/{policy_filename}")
-            
-            if wandb_run is not None:
-                artifact = wandb.Artifact(f"{algorithm}_{env_name}_policy", type="policy")
-                artifact.add_file(f"saved_policies/{policy_filename}")
-                wandb_run.log_artifact(artifact)
-                print(f"Policy uploaded to W&B as artifact: {algorithm}_{env_name}_policy")
-        
-        print("\n" + "="*60)
-        print("Training completed successfully!")
-        print("="*60)
-        
-        # Print summary
-        if 'metrics' in results:
-            print("\nFinal Metrics:")
-            for key, value in results['metrics'].items():
-                if isinstance(value, (int, float)):
-                    print(f"  {key}: {value}")
-        
-        return 0
-        
-    except Exception as e:
-        print(f"\nError during training: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
-        
-    finally:
-        if wandb_run:
-            wandb.finish()
-        if env:
-            env.close()
 
 
 if __name__ == '__main__':

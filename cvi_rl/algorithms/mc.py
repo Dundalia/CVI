@@ -105,6 +105,7 @@ def evaluate_policy_monte_carlo(
     n_episodes: int,
     gamma: float,
     max_steps: int,
+    seed: Optional[int] = None,
 ):
     """
     Monte Carlo evaluation of a policy on a tabular environment.
@@ -125,6 +126,8 @@ def evaluate_policy_monte_carlo(
         Discount factor.
     max_steps : int
         Max steps per episode.
+    seed : int, optional
+        Random seed for reproducibility.
 
     Returns
     -------
@@ -139,6 +142,10 @@ def evaluate_policy_monte_carlo(
     returns: List[float] = []
     successes: List[bool] = []
     steps_list: List[int] = []
+    
+    # Seed the environment if provided
+    if seed is not None:
+        env.reset(seed=seed)
 
     for _ in tqdm(range(n_episodes), desc="MC Evaluation"):
         disc_return, success, steps = run_episode_with_policy(

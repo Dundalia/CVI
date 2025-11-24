@@ -5,6 +5,8 @@ env:
     map_name: "8x8"
     is_slippery: true
 
+seed: 0
+
 training:
   algorithm: pi
   
