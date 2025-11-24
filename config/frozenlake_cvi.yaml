@@ -1,0 +1,25 @@
+env:
+  name: frozenlake-8x8
+  gamma: 0.99
+  kwargs:
+    map_name: "8x8"
+    is_slippery: true
+
+seed: 0
+
+training:
+  algorithm: cvi
+  
+  cvi: 
+    module: cvi_rl.algorithms.tabular_cvi
+    function: run_cvi
+    gamma: 0.99  # Shared: Discount factor
+    grid_strategy: piecewise_centered  # CVI-specific: Grid construction
+    W: 20.0  # CVI-specific: Frequency range [-W, W]
+    K: 128  # CVI-specific: Number of grid points
+    interp_method: polar  # CVI-specific: Interpolation method
+    collapse_method: gaussian  # CVI-specific: Collapse method
+    eval_termination: 1e-6  # Shared: Convergence threshold
+    max_iters: 50  # CVI-specific: Max VI iterations
+    eval_episodes: 100  # Shared: Episodes for MC evaluation
+    max_steps: 200  # Shared: Max steps per MC episode

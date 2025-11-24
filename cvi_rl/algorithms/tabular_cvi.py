@@ -399,8 +399,31 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
         v_history.append(mean_v)
 
         if logger:
-            logger({'mean_v_value': float(mean_v)}, step=iter_num + 1)
-        
+            log_dict = {'mean_v_value': float(mean_v)}
+            
+            # Visualize Distribution every 10 iterations
+            if iter_num % 10 == 0:
+                try:
+                    import wandb
+                    # Initial state
+                    log_state = initial_state if initial_state is not None else 0
+                    if log_state >= n_states: log_state = 0
+                    best_a = policy[log_state]
+                    
+                    xs, pdf = get_pdf_from_cf(omegas, Q_cf[log_state, best_a])
+                    
+                    if len(xs) > 1:
+                        dx = xs[1] - xs[0]
+                        bins = np.append(xs, xs[-1] + dx) - (dx / 2)
+                        
+                        log_dict[f'dist_state_{log_state}_action_{best_a}'] = wandb.Histogram(
+                            np_histogram=(pdf, bins)
+                        )
+                except ImportError:
+                    pass
+
+            logger(log_dict, step=iter_num + 1)
+            
         # Check convergence (policy stable)
         if np.array_equal(policy, policy_prev):
             print(f"Converged at iteration {iter_num + 1}")
@@ -410,7 +433,7 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     
     # Final MC evaluation
     if eval_episodes > 0 and env is not None:
-        avg_return, var_return, success_rate, _, avg_steps, _ = evaluate_policy_monte_carlo(
+        avg_return, var_return, success_rate, returns, avg_steps, _ = evaluate_policy_monte_carlo(
             env, env_spec, policy, n_episodes=eval_episodes, gamma=gamma, max_steps=max_steps, initial_state=initial_state, seed=seed
         )
         mc_metrics = {
@@ -418,6 +441,14 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
             'mc_success_rate': float(success_rate),
             # 'mc_var_return': float(var_return),
         }
+        
+        # Log histogram of MC returns
+        if logger:
+            try:
+                import wandb
+                logger({'mc_returns_hist': wandb.Histogram(returns)})
+            except ImportError:
+                pass
     else:
         mc_metrics = {}
     
@@ -438,3 +469,33 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
         'omegas': omegas,
         'metrics': metrics
     }
+
+def get_pdf_from_cf(omegas: np.ndarray, cf: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Invert a Characteristic Function to get the PDF (Probability Density Function).
+    """
+    d_omega = omegas[1] - omegas[0]
+    K = len(omegas)
+    
+    # 1. Shift CF for IFFT (assuming omegas are centered around 0)
+    cf_shifted = np.fft.ifftshift(cf)
+    
+    # 2. Inverse FFT to get PDF
+    # We multiply by K/range to normalize, but for visualization relative shape matters most
+    pdf_complex = np.fft.ifft(cf_shifted)
+    pdf_real = np.real(pdf_complex)
+    
+    # 3. Shift PDF to center the domain
+    pdf_real = np.fft.fftshift(pdf_real)
+    
+    # 4. Construct x-axis (Return values)
+    # The span of the spatial domain is 2*pi / d_omega
+    L = 2 * np.pi / d_omega
+    xs = np.linspace(-L/2, L/2, K, endpoint=False)
+    
+    # 5. Normalize to sum to 1 (to treat as probabilities/counts for histogram)
+    # Clip negatives that might appear due to numerical noise
+    pdf_real = np.maximum(pdf_real, 0)
+    pdf_real = pdf_real / (np.sum(pdf_real) + 1e-9)
+    
+    return xs, pdf_real

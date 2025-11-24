@@ -200,6 +200,10 @@ def run_monte_carlo(env_spec: TabularEnvSpec, env: gym.Env, config: dict, logger
         - returns: List of episode returns
     """
     import time
+    try:
+        import wandb
+    except ImportError:
+        wandb = None
     
     print("\n" + "="*60)
     print("Running Monte Carlo Evaluation")
@@ -219,7 +223,7 @@ def run_monte_carlo(env_spec: TabularEnvSpec, env: gym.Env, config: dict, logger
     
     start_time = time.time()
     
-    episodes_return, avg_return, var_return, success_rate, returns, avg_steps, var_steps = evaluate_policy_monte_carlo(
+    avg_return, var_return, success_rate, returns, avg_steps, var_steps = evaluate_policy_monte_carlo(
         env,
         env_spec,
         policy,
@@ -240,10 +244,12 @@ def run_monte_carlo(env_spec: TabularEnvSpec, env: gym.Env, config: dict, logger
         'success_rate': success_rate,
         'avg_steps': avg_steps,
         'var_steps': var_steps,
-        'episodes_return': episodes_return.tolist(),
     }
     
     if logger:
+        # Log histogram of returns
+        if wandb is not None:
+            metrics['returns_hist'] = wandb.Histogram(returns)
         logger(metrics)
     
     print(f"\nAvg Return: {avg_return:.3f}")

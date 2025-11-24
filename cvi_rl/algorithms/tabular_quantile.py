@@ -124,10 +124,11 @@ def run_quantile_vi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
             dist_values = Z[log_state, best_a]
             
             # Log histogram of the particles/quantiles
-            logger({
-                'mean_v_value': float(mean_v),
-                f'dist_state_{log_state}_action_{best_a}': wandb.Histogram(dist_values)
-            }, step=iter_num + 1)
+            if wandb is not None:
+                logger({
+                    'mean_v_value': float(mean_v),
+                    f'dist_state_{log_state}_action_{best_a}': wandb.Histogram(dist_values)
+                }, step=iter_num + 1)
         elif logger:
             logger({'mean_v_value': float(mean_v)}, step=iter_num + 1)
             
@@ -191,13 +192,17 @@ def run_quantile_vi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     # MC Eval
     mc_metrics = {}
     if eval_episodes > 0 and env is not None:
-        avg_return, var_return, success_rate, _, avg_steps, _ = evaluate_policy_monte_carlo(
+        avg_return, var_return, success_rate, returns, avg_steps, _ = evaluate_policy_monte_carlo(
             env, env_spec, policy, n_episodes=eval_episodes, gamma=gamma, max_steps=max_steps, initial_state=initial_state, seed=seed
         )
         mc_metrics = {
             'mc_avg_return': float(avg_return),
             'mc_success_rate': float(success_rate),
         }
+        
+        # Log histogram of MC returns
+        if logger and wandb is not None:
+            logger({'mc_returns_hist': wandb.Histogram(returns)})
         
     metrics = {
         'training_time': elapsed_time,
