@@ -1,5 +1,3 @@
-# cvi_rl/algorithms/tabular_quantile.py
-
 from __future__ import annotations
 
 import numpy as np
@@ -115,7 +113,6 @@ def run_quantile_vi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
         Q_means = np.mean(Z, axis=2)
         policy = np.argmax(Q_means, axis=1)
         
-        # Log progress
         mean_v = np.mean(np.max(Q_means, axis=1))
         v_history.append(mean_v)
         
@@ -123,7 +120,7 @@ def run_quantile_vi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
             best_a = policy[log_state]
             dist_values = Z[log_state, best_a]
             
-            # Log histogram of the particles/quantiles
+            #TODO: This doesnt work yet!
             if wandb is not None:
                 logger({
                     'mean_v_value': float(mean_v),
@@ -173,12 +170,11 @@ def run_quantile_vi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
                     all_next_values, all_next_weights, n_quantiles
                 )
         
-        # Check convergence on Mean Q-values
-        Q_means_new = np.mean(Z_new, axis=2)
-        diff = np.max(np.abs(Q_means_new - Q_means))
-        
         Z = Z_new
         
+        # Check convergence
+        Q_means_new = np.mean(Z_new, axis=2)
+        diff = np.max(np.abs(Q_means_new - Q_means))
         if diff < float(eval_termination):
             print(f"Converged at iteration {iter_num + 1}")
             break
