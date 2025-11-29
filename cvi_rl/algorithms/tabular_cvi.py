@@ -9,6 +9,8 @@ import numpy as np
 import time
 
 from cvi_rl.algorithms.mc import evaluate_policy_monte_carlo 
+from cvi_rl.algorithms.utils import sample_initial_states
+
 
 from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
 from cvi_rl.cf.grids import make_omega_grid, GridStrategy
@@ -347,7 +349,7 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     Run CVI as a value iteration loop: evaluate V_cf → collapse to Q → greedy policy → repeat.
     Includes MC evaluation for metrics, like in PI.
     """
-    
+        
     gamma = config['gamma']
     grid_strategy = config['grid_strategy']
     W = config['W']
@@ -431,10 +433,13 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     
     elapsed_time = time.time() - start_time
     
-    # Final MC evaluation
+    states_to_evaluate = sample_initial_states(env, eval_episodes)
+    cvi_expected_from_reset = float(np.mean(np.max(Q_scalar[states_to_evaluate], axis=1)))
+    
     if eval_episodes > 0 and env is not None:
         avg_return, var_return, success_rate, returns, avg_steps, _ = evaluate_policy_monte_carlo(
-            env, env_spec, policy, n_episodes=eval_episodes, gamma=gamma, max_steps=max_steps, initial_state=initial_state, seed=seed
+            env, env_spec, policy, n_episodes=eval_episodes, gamma=gamma, max_steps=max_steps, 
+            seed=seed, states_to_evaluate=states_to_evaluate
         )
         mc_metrics = {
             'mc_avg_return': float(avg_return),
@@ -442,25 +447,24 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
             # 'mc_var_return': float(var_return),
         }
         
-        # Log histogram of MC returns
-        if logger:
-            try:
-                import wandb
-                logger({'mc_returns_hist': wandb.Histogram(returns)})
-            except ImportError:
-                pass
+
     else:
         mc_metrics = {}
     
     metrics = {
         'training_time': elapsed_time,
         'converged_iterations': len(v_history),
-        'final_mean_value': float(np.mean(np.max(Q_scalar, axis=1))),
+        'expected_initial_state_value': cvi_expected_from_reset,
+        "final_mean_v_value": float(np.mean(v_history[-1])),
         **mc_metrics
     }
     
     if logger:
         logger(metrics) 
+    
+    print(f"\nConverged in {metrics['converged_iterations']} iterations")
+    print(f"Training time: {elapsed_time:.2f}s")
+    print(f"Expected V (from reset states): {metrics['expected_initial_state_value']:.3f}")
     
     return {
         'policy': policy,

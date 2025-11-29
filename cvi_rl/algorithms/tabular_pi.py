@@ -7,7 +7,10 @@ from typing import Tuple, Optional, List
 import numpy as np
 from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
 from tqdm import tqdm
-
+import time
+import numpy as np
+from cvi_rl.algorithms.mc import evaluate_policy_monte_carlo
+from cvi_rl.algorithms.utils import sample_initial_states
 
 def policy_evaluation(
     env_spec: TabularEnvSpec,
@@ -160,7 +163,7 @@ def policy_iteration(
     if init_policy is not None:
         policy = np.array(init_policy, dtype=int, copy=True)
     else:
-        policy = np.random.randint(0, env_spec.n_actions, size=n_states)
+        policy = np.random.randint(0, n_actions, size=n_states)
 
     v_history: Optional[List[np.ndarray]] = [] if return_v_history else None
 
@@ -230,9 +233,6 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
         - Q_values: Action values Q
         - metrics: Performance metrics
     """
-    import time
-    import numpy as np
-    from .mc import evaluate_policy_monte_carlo
     
     print("\n" + "="*60)
     print("Running Policy Iteration")
@@ -244,7 +244,6 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
     max_policy_eval_iters = config['max_policy_eval_iters']
     max_policy_iters = config['max_policy_iters']
     init_policy = config.get('init_policy', None)
-    initial_state = config.get('initial_state', None)
     seed = config.get('seed', None)
     
     print(f"  Policy eval termination: {eval_termination}")
@@ -274,11 +273,15 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
         max_iters=max_policy_eval_iters
     )
     
+    states_to_evaluate = sample_initial_states(env, config['eval_episodes'])
+    pi_expected_from_reset = float(np.mean(V_values[states_to_evaluate]))
+    
+    
     metrics = {
         'training_time': elapsed_time,
         'converged_iterations': len(v_history),
-        'final_mean_value': float(np.mean(V_values)),
-        # 'final_mean_q': float(np.mean(Q_values)),
+        'expected_initial_state_value': pi_expected_from_reset,
+        "final_mean_v_value": float(np.mean(V_values)),
     }
     
     # Log the value function history
@@ -298,7 +301,7 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
             n_episodes=n_episodes,
             gamma=gamma,
             max_steps=max_steps,
-            initial_state=initial_state,
+            states_to_evaluate=states_to_evaluate,
             seed=seed
         )
         
@@ -314,8 +317,6 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
     
     print(f"\nConverged in {metrics['converged_iterations']} iterations")
     print(f"Training time: {elapsed_time:.2f}s")
-    print(f"Mean V: {metrics['final_mean_value']:.3f}")
-    # print(f"Mean Q: {metrics['final_mean_q']:.3f}")
     
     return {
         'policy': policy,

@@ -161,7 +161,8 @@ def run_value_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=None
     metrics = {
         'training_time': elapsed_time,
         'converged_iterations': len(v_history),
-        'expected_initial_state_value': vi_expected_from_reset
+        'expected_initial_state_value': vi_expected_from_reset,
+        "final_mean_v_value": float(np.mean(V_values))
     }
     
     if logger and v_history is not None:

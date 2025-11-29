@@ -68,6 +68,8 @@ def run_quantile_vi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     print("Running Quantile Value Iteration (QVI)")
     print("="*60)
     
+    from cvi_rl.algorithms.utils import sample_initial_states
+    
     # Config
     gamma = config['gamma']
     max_iters = config['max_iters']
@@ -185,11 +187,16 @@ def run_quantile_vi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     Q_means = np.mean(Z, axis=2)
     policy = np.argmax(Q_means, axis=1)
     
+    # Sample initial states for consistent evaluation
+    states_to_evaluate = sample_initial_states(env, eval_episodes)
+    qvi_expected_from_reset = float(np.mean(np.max(Q_means[states_to_evaluate], axis=1)))
+    
     # MC Eval
     mc_metrics = {}
     if eval_episodes > 0 and env is not None:
         avg_return, var_return, success_rate, returns, avg_steps, _ = evaluate_policy_monte_carlo(
-            env, env_spec, policy, n_episodes=eval_episodes, gamma=gamma, max_steps=max_steps, initial_state=initial_state, seed=seed
+            env, env_spec, policy, n_episodes=eval_episodes, gamma=gamma, max_steps=max_steps, 
+            seed=seed, states_to_evaluate=states_to_evaluate
         )
         mc_metrics = {
             'mc_avg_return': float(avg_return),
@@ -203,12 +210,16 @@ def run_quantile_vi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     metrics = {
         'training_time': elapsed_time,
         'converged_iterations': len(v_history),
-        'final_mean_value': float(np.mean(np.max(Q_means, axis=1))),
+        'expected_initial_state_value': qvi_expected_from_reset,
         **mc_metrics
     }
     
     if logger:
         logger(metrics)
+        
+    print(f"\nConverged in {metrics['converged_iterations']} iterations")
+    print(f"Training time: {elapsed_time:.2f}s")
+    print(f"Expected V (from reset states): {metrics['expected_initial_state_value']:.3f}")
         
     return {
         'policy': policy,
