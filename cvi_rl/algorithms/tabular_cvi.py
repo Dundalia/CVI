@@ -11,7 +11,6 @@ import time
 from cvi_rl.algorithms.mc import evaluate_policy_monte_carlo 
 from cvi_rl.algorithms.utils import sample_initial_states
 
-
 from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
 from cvi_rl.cf.grids import make_omega_grid, GridStrategy
 from cvi_rl.cf.processing import (
@@ -360,8 +359,6 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     max_iters = config['max_iters']  # Max VI iterations
     eval_episodes = config['eval_episodes']  # For final MC eval
     max_steps = config['max_steps']  # Max steps per episode
-    initial_state = config.get('initial_state', None)
-    init_policy = config.get('init_policy', None)
     seed = config.get('seed', None)
     
     print(f"Running CVI Value Iteration: {grid_strategy} grid, K={K}, W={W}")
@@ -369,10 +366,7 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     n_states = env_spec.n_states
     start_time = time.time()
     
-    if init_policy is not None:
-        policy = np.array(init_policy, dtype=int, copy=True)
-    else:
-        policy = np.random.randint(0, env_spec.n_actions, size=n_states)
+    policy = np.zeros(n_states, dtype=int)
         
     v_history = []
     
@@ -402,28 +396,6 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
 
         if logger:
             log_dict = {'mean_v_value': float(mean_v)}
-            
-            # Visualize Distribution every 10 iterations
-            if iter_num % 10 == 0:
-                try:
-                    import wandb
-                    # Initial state
-                    log_state = initial_state if initial_state is not None else 0
-                    if log_state >= n_states: log_state = 0
-                    best_a = policy[log_state]
-                    
-                    xs, pdf = get_pdf_from_cf(omegas, Q_cf[log_state, best_a])
-                    
-                    if len(xs) > 1:
-                        dx = xs[1] - xs[0]
-                        bins = np.append(xs, xs[-1] + dx) - (dx / 2)
-                        
-                        log_dict[f'dist_state_{log_state}_action_{best_a}'] = wandb.Histogram(
-                            np_histogram=(pdf, bins)
-                        )
-                except ImportError:
-                    pass
-
             logger(log_dict, step=iter_num + 1)
             
         # Check convergence (policy stable)
@@ -464,7 +436,6 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     
     print(f"\nConverged in {metrics['converged_iterations']} iterations")
     print(f"Training time: {elapsed_time:.2f}s")
-    print(f"Expected V (from reset states): {metrics['expected_initial_state_value']:.3f}")
     
     return {
         'policy': policy,

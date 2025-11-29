@@ -122,7 +122,6 @@ def policy_iteration(
     eval_termination: float,
     max_policy_eval_iters: int,
     max_policy_iters: int,
-    init_policy: Optional[np.ndarray],
     return_v_history: bool,
 ) -> Tuple[np.ndarray, np.ndarray, Optional[List[np.ndarray]]]:
     """
@@ -143,8 +142,6 @@ def policy_iteration(
         Max iterations for each policy evaluation phase.
     max_policy_iters : int
         Max number of policy improvement steps.
-    init_policy : np.ndarray, optional
-        Initial policy. If None, start with uniform zeros (e.g., always action 0).
     return_v_history : bool
         If True, also return a list of policies visited.
 
@@ -159,15 +156,13 @@ def policy_iteration(
     """
     n_states = env_spec.n_states
     n_actions = env_spec.n_actions
-
-    if init_policy is not None:
-        policy = np.array(init_policy, dtype=int, copy=True)
-    else:
-        policy = np.random.randint(0, n_actions, size=n_states)
+        
+    policy = np.zeros(n_states, dtype=int)
 
     v_history: Optional[List[np.ndarray]] = [] if return_v_history else None
 
     for _ in tqdm(range(max_policy_iters), desc="Policy Iteration"):
+        
         # 1) Policy evaluation
         _, v_values = policy_evaluation(
             env_spec,
@@ -190,13 +185,13 @@ def policy_iteration(
         policy = new_policy
 
     #! Final evaluation with the converged policy
-    # _, v_values = policy_evaluation(
-    #     env_spec,
-    #     policy,
-    #     gamma=gamma,
-    #     termination=eval_termination,
-    #     max_iters=max_policy_eval_iters,
-    # )
+    _, v_values = policy_evaluation(
+        env_spec,
+        policy,
+        gamma=gamma,
+        termination=eval_termination,
+        max_iters=max_policy_eval_iters,
+    )
 
     if return_v_history:
         return policy, v_values, v_history
@@ -259,7 +254,6 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
         eval_termination=eval_termination,
         max_policy_eval_iters=max_policy_eval_iters,
         max_policy_iters=max_policy_iters,
-        init_policy=init_policy,
         return_v_history=True
     )
     
@@ -276,6 +270,7 @@ def run_policy_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=Non
     states_to_evaluate = sample_initial_states(env, config['eval_episodes'])
     pi_expected_from_reset = float(np.mean(V_values[states_to_evaluate]))
     
+    print(f"First Evaluation: {np.mean(np.mean(v_history[0]))}")
     
     metrics = {
         'training_time': elapsed_time,

@@ -11,7 +11,6 @@ from cvi_rl.algorithms.utils import sample_initial_states
 def value_iteration(
     env_spec: TabularEnvSpec,
     gamma: float,
-    initial_values: Optional[np.ndarray],
     iterations: int,
     termination: float,
     track_history: bool,
@@ -25,8 +24,6 @@ def value_iteration(
         Tabular environment specification (n_states, n_actions, P, ...).
     gamma : float
         Discount factor in [0,1).
-    initial_values : np.ndarray, optional
-        Initial value function, shape [n_states]. If None, initialized to zeros.
     iterations : int
         Maximum number of iterations.
     termination : float
@@ -49,11 +46,7 @@ def value_iteration(
     n_actions = env_spec.n_actions
     P: TransitionModel = env_spec.P
 
-    if initial_values is None:
-        values = np.zeros(n_states, dtype=float)
-    else:
-        values = np.array(initial_values, dtype=float, copy=True)
-
+    values = np.zeros(n_states, dtype=float)
     policy = np.zeros(n_states, dtype=int)
 
     value_history: Optional[List[np.ndarray]] = [] if track_history else None
@@ -135,7 +128,6 @@ def run_value_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=None
     gamma = config['gamma']
     eval_termination = config['eval_termination']
     max_policy_iters = config['max_policy_iters']
-    init_policy = config.get('init_policy', None)
     seed = config.get('seed', None)
     
     print(f"  Value iteration termination: {eval_termination}")
@@ -147,7 +139,6 @@ def run_value_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=None
     policy, V_values, v_history, max_change_history = value_iteration(
         env_spec,
         gamma,
-        initial_values=init_policy,
         iterations=max_policy_iters,
         termination=eval_termination,
         track_history=True,
@@ -157,6 +148,9 @@ def run_value_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=None
     
     states_to_evaluate = sample_initial_states(env, config['eval_episodes'])
     vi_expected_from_reset = float(np.mean(V_values[states_to_evaluate]))
+    
+    print(f"First Evaluation: {np.mean(np.mean(v_history[0]))}")
+
     
     metrics = {
         'training_time': elapsed_time,

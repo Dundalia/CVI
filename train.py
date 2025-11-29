@@ -8,6 +8,7 @@ import datetime
 import yaml
 import numpy as np
 import importlib
+import torch
 
 try:
     import wandb
@@ -18,19 +19,15 @@ except ImportError:
 from cvi_rl.envs.registry import make_env
 
 
-class ConfigLoader:
-    """Load and merge configuration from YAML files and command line arguments."""
-    
+class ConfigLoader:    
     @staticmethod
     def load_yaml(config_path: str) -> Dict[str, Any]:
-        """Load YAML configuration file."""
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         return config if config is not None else {}
     
     @staticmethod
     def parse_override(override_str: str) -> tuple[str, Any]:
-        """Parse a command line override in the format 'key.subkey=value'."""
         key_path, value_str = override_str.split('=', 1)
         
         try:
@@ -42,7 +39,6 @@ class ConfigLoader:
     
     @staticmethod
     def set_nested(config: Dict, key_path: str, value: Any) -> None:
-        """Set a nested dictionary value using dot notation."""
         keys = key_path.split('.')
         current = config
         
@@ -55,28 +51,18 @@ class ConfigLoader:
     
     @classmethod
     def load(cls, config_path: str, overrides: list[str] = None) -> Dict[str, Any]:
-        """Load config from file and apply command line overrides."""
         config = cls.load_yaml(config_path)
-        
         if overrides:
             for override in overrides:
                 key_path, value = cls.parse_override(override)
                 cls.set_nested(config, key_path, value)
-        
         return config
 
-
 def main():
-    """Main entry point for training script."""
     parser = argparse.ArgumentParser(
         description='Train RL algorithms',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python train.py config/monte_carlo.yaml
-  python train.py config/policy_eval.yaml logger.do.online=true
-        """
-    )
+        epilog="Examples: python train.py config.yaml training.algorithm=tabular_cvi ")
     
     parser.add_argument(
         'config',
@@ -93,7 +79,6 @@ Examples:
     
     args = parser.parse_args()
     
-    # Load configuration
     try:
         config = ConfigLoader.load(args.config, args.overrides)
     except FileNotFoundError:
@@ -103,9 +88,9 @@ Examples:
         print(f"Error loading config: {e}")
         return 1
     
-    # Set random seed for reproducibility
     seed = config.get('seed', 0)
-    np.random.seed(seed)
+    np.random.seed(seed=seed)
+    torch.manual_seed(seed=seed)
     print(f"Random seed set to: {seed}")
     
     env_config = config.get('env', {})
@@ -144,18 +129,7 @@ Examples:
     print(f"\nInitializing environment: {env_name}")
     env_spec, env = make_env(env_name, **env_kwargs)
     
-    #TODO: Remove redundant print statements
-    print(f"  States: {env_spec.n_states}")
-    print(f"  Actions: {env_spec.n_actions}")
-    print(f"  Gamma: {env_config.get('gamma', 0.99)}")
-    
-
-    init_policy = np.random.randint(0, env_spec.n_actions, size=env_spec.n_states)
-    
     algo_config = training_config.get(algorithm, {})
-    
-    algo_config['init_policy'] = init_policy
-    algo_config['seed'] = seed
     
     module_path = algo_config.get('module')
     function_name = algo_config.get('function')
@@ -164,8 +138,6 @@ Examples:
         print(f"Error: Algorithm '{algorithm}' missing 'module' or 'function' in config")
         print(f"Expected: training.{algorithm}.module and training.{algorithm}.function")
         return 1
-    
-    algo_config['gamma'] = env_config.get('gamma', 0.99)
         
     module = importlib.import_module(module_path)
     train_func = getattr(module, function_name)
@@ -202,8 +174,6 @@ Examples:
         env.close()
     
     return 0
-        
-
 
 if __name__ == '__main__':
     sys.exit(main())
