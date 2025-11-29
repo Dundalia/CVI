@@ -15,7 +15,7 @@ training:
     function: run_cvi
     gamma: 0.99   # Shared: Discount factor
     grid_strategy: piecewise_centered  # CVI-specific: Grid construction
-    W: 20.0  # CVI-specific: Frequency range [-W, W]
+    W: 5.0  # CVI-specific: Frequency range [-W, W]
     K: 1024  # CVI-specific: Number of grid points
     interp_method: polar  # CVI-specific: Interpolation method
     collapse_method: gaussian  # CVI-specific: Collapse method

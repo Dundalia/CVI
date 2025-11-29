@@ -180,38 +180,40 @@ def cvi_policy_evaluation(
     K = len(omegas)
     scaled_omegas = gamma * omegas
 
-    # 2) Precompute reward CF_R(s, ω)
-    reward_cf_table = compute_immediate_reward_cf_state_frequency(env_spec, policy, omegas)
-
-    # 3) Initialize V(s, ω) = 1 (CF of zero-return RV)
+    # 2) Initialize V(s, ω) = 1 (CF of zero-return RV)
     V = np.ones((n_states, K), dtype=complex)
 
     for _ in range(max_iters):
         V_prev = V.copy()
 
-        # 3a) Compute V(s, gamma * ω) via interpolation necessary for L2 loss bootstrapping
+        # 2a) Compute V(s, gamma * ω) via interpolation necessary for L2 loss bootstrapping
         V_cf_gamma = np.zeros_like(V_prev)
         
         for s in range(n_states):
             V_cf_gamma[s] = interpolate_cf(scaled_omegas, omegas, V_prev[s], interp_method, **interp_kwargs)
         
-        # 3b) Bellman update for each state
+        # 2b) Bellman update for each state
         max_delta = 0.0
 
         for s in range(n_states):
             a = int(policy[s])
 
-            # Expectation over next states under P(s,a)
-            expectation_over_next_state = np.zeros(K, dtype=complex)
-            for prob, next_state, _, done in P[s][a]:
+            # Correct Bellman update for CFs handling joint distribution of (R, S')
+            # V(s, w) = Sum_{s', r} P(s', r | s, a) * exp(i * w * r) * V(s', gamma * w)
+            new_v_s = np.zeros(K, dtype=complex)
+            
+            for prob, next_state, reward, done in P[s][a]:
+                # Term for this specific transition branch
+                term = np.exp(1j * omegas * reward)
                 if done:
-                    expectation_over_next_state += prob * 1.0  #! Multiplying by 1 to make CF of zero future return
+                    # If done, future return is 0, so CF is 1.0 (term * 1.0)
+                    pass
                 else:
-                    expectation_over_next_state += prob * V_cf_gamma[next_state]
+                    term *= V_cf_gamma[next_state]
+                
+                new_v_s += prob * term
 
-            # Time domain: V(s) = R + gamma * E[V(S')]
-            # Frequency domain: V(s,ω) = CF_R(s,ω) * E[V(S', gamma ω)]
-            V[s] = reward_cf_table[s] * expectation_over_next_state
+            V[s] = new_v_s
             max_delta = max(max_delta, np.max(np.abs(V[s] - V_prev[s])))
 
         if max_delta < float(eps):
@@ -304,21 +306,6 @@ def cvi_action_evaluation_from_V(
             Q_cf[s, a] = q_sa
 
     return Q_cf
-
-    # for s in range(n_states):
-    #     for a in range(n_actions):
-    #         exp_next = np.zeros(K, dtype=complex)
-    #         for prob, next_state, _, done in P[s][a]:
-    #             if done:
-    #                 exp_next += prob * 1.0 #! Multiplying by 1 to make CF of zero future return
-    #             else:
-    #                 exp_next += prob * V_cf_gamma[next_state]
-
-    #         # Time domain: Q(s,a) = R + gamma * E[Q(s', a')]
-    #         # Frequency domain: Q(s,a,ω) = CF_R(s,a,ω) * E[Q(s', a' gamma ω)]
-    #         Q_cf[s, a] = reward_cf_sa[s, a] * exp_next
-
-    # return Q_cf
 
 
 # ---------------------------------------------------------------------------
