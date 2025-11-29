@@ -19,6 +19,6 @@ training:
     n_quantiles: 32  # Number of particles/quantiles to maintain
     
     eval_termination: 1e-6
-    max_iters: 200
+    max_iters: 5000
     eval_episodes: 100
     max_steps: 200
