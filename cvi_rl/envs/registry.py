@@ -33,18 +33,14 @@ def make_env(name: str, **kwargs: Any) -> Tuple[TabularEnvSpec, gym.Env]:
     """
     name = name.lower()
 
-    # Taxi aliases
     if name in {"taxi", "taxi-v3"}:
         return make_taxi_env(**kwargs)
 
-    # Handle all FrozenLake variants dynamically
     if name.startswith("frozenlake"):
-        # Parse map_name from name or kwargs
         parts = name.split("-")
-        map_name = "4x4"  # default
+        # map_name = "4x4"
         if len(parts) >= 2:
             map_name = parts[1]
-        # Allow override from kwargs, but avoid conflict
         map_name = kwargs.pop('map_name', map_name)
         is_slippery = "slip" in parts or kwargs.pop('is_slippery', False)
         return make_gridworld_env(map_name=map_name, is_slippery=is_slippery, **kwargs)

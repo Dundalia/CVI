@@ -4,6 +4,12 @@ from typing import Tuple, Optional, Dict, Any, List
 import numpy as np
 import time
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
 from cvi_rl.algorithms.mc import evaluate_policy_monte_carlo
@@ -258,7 +264,7 @@ def run_c51(env_spec: TabularEnvSpec, env, config: Dict[str, Any], logger=None):
             logger({'mean_v_value': float(np.mean(value_history[i]))}, step=i)
 
     if eval_episodes > 0:
-        avg_return, var_return, success_rate, _, avg_steps, var_steps = evaluate_policy_monte_carlo(
+        avg_return, var_return, success_rate, returns, avg_steps, var_steps = evaluate_policy_monte_carlo(
             env,
             env_spec,
             policy,
@@ -274,6 +280,41 @@ def run_c51(env_spec: TabularEnvSpec, env, config: Dict[str, Any], logger=None):
                 "mc_success_rate": float(success_rate),
             }
         )
+
+        if logger:
+            try:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                
+                # Plot MC Histogram
+                ax.hist(returns, bins=50, density=True, alpha=0.5, color='gray', label='Monte Carlo (Ground Truth)')
+                
+                # Plot C51 Distribution for State 0
+                target_state = 0
+                # Get distribution for the chosen action at this state
+                action = policy[target_state]
+                probs = Z[target_state, action]
+                
+                # Plot as bar/stem or line. Since atoms are discrete, bar is good but might be too thin.
+                # Let's use plot with markers.
+                # To make it comparable to density, we need to divide by bin width (delta_z)
+                delta_z = atoms[1] - atoms[0]
+                density = probs / delta_z
+                
+                ax.plot(atoms, density, color='red', linewidth=2, label=f'C51 Estimate (State {target_state})')
+                
+                ax.set_xlim(-2, 2)
+                ax.set_title(f"Return Distribution Comparison (State {target_state})")
+                ax.set_xlabel("Return")
+                ax.set_ylabel("Density")
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                
+                if wandb and wandb.run:
+                    logger({'distribution_plot': wandb.Image(fig)})
+                
+                plt.close(fig)
+            except Exception as e:
+                print(f"Warning: Could not generate distribution plot: {e}")
 
     if logger:
         logger(metrics)

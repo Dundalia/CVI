@@ -1,0 +1,23 @@
+env:
+  name: frozenlake-8x8
+  gamma: 0.99
+  kwargs:
+    map_name: "8x8"
+    is_slippery: true
+
+seed: 0
+
+training:
+  algorithm: c51
+  
+  c51: 
+    gamma: 0.99  # Shared: Discount factor
+    module: cvi_rl.algorithms.tabular_c51
+    function: run_c51
+    v_min: -5.0  # C51-specific: Minimum return
+    v_max: 5.0  # C51-specific: Maximum return
+    n_atoms: 51  # C51-specific: Number of atoms
+    eval_termination: 1e-6  # Shared: Convergence threshold
+    max_iters: 1000  # CVI-specific: Max VI iterations
+    eval_episodes: 100  # Shared: Episodes for MC evaluation
+    max_steps: 1000 # Shared: Max steps per MC episode

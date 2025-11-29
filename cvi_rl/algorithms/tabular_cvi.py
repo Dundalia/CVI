@@ -21,6 +21,12 @@ from cvi_rl.cf.processing import (
 )
 from tqdm import tqdm
 
+import matplotlib.pyplot as plt
+try:
+    import wandb
+except ImportError:
+    wandb = None
+
 
 # ---------------------------------------------------------------------------
 # Reward CFs
@@ -225,9 +231,9 @@ def cvi_action_evaluation_from_V(
     env_spec: TabularEnvSpec,
     V_cf: np.ndarray,
     omegas: np.ndarray,
-    gamma: float = 0.9,
-    interp_method: InterpolationMethod = "linear",
-    interp_kwargs: dict = None
+    gamma: float,
+    interp_method: InterpolationMethod,
+    interp_kwargs: dict
 ) -> np.ndarray:
     """
     Compute the CF action-values Q_cf(s,a,ω) from a given CF state-value V(s,ω).
@@ -269,8 +275,8 @@ def cvi_action_evaluation_from_V(
             f"V_cf shape {V_cf.shape} incompatible with (n_states, K)=({n_states}, {K})."
         )
 
-    # 1) Reward CF CF_R(s,a,ω)
-    reward_cf_sa = compute_immediate_reward_cf_state_action_frequency(env_spec, omegas)  # [n_states, n_actions, K]
+    #! 1) Reward CF CF_R(s,a,ω)
+    #!reward_cf_sa = compute_immediate_reward_cf_state_action_frequency(env_spec, omegas)  # [n_states, n_actions, K]
 
     # 2) Compute V(s, gamma * ω) via interpolation necessary for L2 loss bootstrapping
     scaled_omegas = gamma * omegas
@@ -281,21 +287,38 @@ def cvi_action_evaluation_from_V(
 
     # 3) Build Q_cf(s,a,ω) via Bellman equation in CF-domain
     Q_cf = np.zeros((n_states, n_actions, K), dtype=complex)
-
+    
     for s in range(n_states):
         for a in range(n_actions):
-            exp_next = np.zeros(K, dtype=complex)
-            for prob, next_state, _, done in P[s][a]:
+            q_sa = np.zeros(K, dtype=complex)
+            
+            for prob, next_state, reward, done in P[s][a]:
+                term = np.exp(1j * omegas * reward)
                 if done:
-                    exp_next += prob * 1.0 #! Multiplying by 1 to make CF of zero future return
+                    pass
                 else:
-                    exp_next += prob * V_cf_gamma[next_state]
+                    term *= V_cf_gamma[next_state]
+                
+                q_sa += prob * term
 
-            # Time domain: Q(s,a) = R + gamma * E[Q(s', a')]
-            # Frequency domain: Q(s,a,ω) = CF_R(s,a,ω) * E[Q(s', a' gamma ω)]
-            Q_cf[s, a] = reward_cf_sa[s, a] * exp_next
+            Q_cf[s, a] = q_sa
 
     return Q_cf
+
+    # for s in range(n_states):
+    #     for a in range(n_actions):
+    #         exp_next = np.zeros(K, dtype=complex)
+    #         for prob, next_state, _, done in P[s][a]:
+    #             if done:
+    #                 exp_next += prob * 1.0 #! Multiplying by 1 to make CF of zero future return
+    #             else:
+    #                 exp_next += prob * V_cf_gamma[next_state]
+
+    #         # Time domain: Q(s,a) = R + gamma * E[Q(s', a')]
+    #         # Frequency domain: Q(s,a,ω) = CF_R(s,a,ω) * E[Q(s', a' gamma ω)]
+    #         Q_cf[s, a] = reward_cf_sa[s, a] * exp_next
+
+    # return Q_cf
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +405,7 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
         
         # 2) Compute Q_cf from V_cf
         Q_cf = cvi_action_evaluation_from_V(
-            env_spec, V_cf, omegas, gamma=gamma, interp_method=interp_method
+            env_spec, V_cf, omegas, gamma=gamma, interp_method=interp_method, interp_kwargs=None
         )
         
         # 3) Collapse Q_cf to scalar Q
@@ -419,6 +442,32 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
             # 'mc_var_return': float(var_return),
         }
         
+        if logger:
+            try:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                
+                # Plot MC Histogram
+                ax.hist(returns, bins=50, density=True, alpha=0.5, color='gray', label='Monte Carlo (Ground Truth)')
+                
+                # Plot CVI PDF for State 0 (assuming it's the start state)
+                target_state = 0
+                xs, pdf = get_pdf_from_cf(omegas, V_cf[target_state])
+                ax.plot(xs, pdf, color='blue', linewidth=2, label=f'CVI Estimate (State {target_state})')
+                
+                ax.set_xlim(-2, 2)
+                ax.set_title(f"Return Distribution Comparison (State {target_state})")
+                ax.set_xlabel("Return")
+                ax.set_ylabel("Density")
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                
+                # Log to wandb
+                if wandb and wandb.run:
+                    logger({'distribution_plot': wandb.Image(fig)})
+                
+                plt.close(fig)
+            except Exception as e:
+                print(f"Warning: Could not generate distribution plot: {e}")
 
     else:
         mc_metrics = {}

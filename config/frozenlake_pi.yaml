@@ -3,7 +3,7 @@ env:
   gamma: 0.99
   kwargs:
     map_name: "8x8"
-    is_slippery: false
+    is_slippery: true
 
 seed: 0
 

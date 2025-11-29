@@ -3,7 +3,7 @@ env:
   gamma: 0.99
   kwargs:
     map_name: "8x8"
-    is_slippery: false
+    is_slippery: true
 
 seed: 0
 
@@ -15,11 +15,11 @@ training:
     function: run_cvi
     gamma: 0.99   # Shared: Discount factor
     grid_strategy: piecewise_centered  # CVI-specific: Grid construction
-    W: 10.0  # CVI-specific: Frequency range [-W, W]
-    K: 256  # CVI-specific: Number of grid points
+    W: 20.0  # CVI-specific: Frequency range [-W, W]
+    K: 1024  # CVI-specific: Number of grid points
     interp_method: polar  # CVI-specific: Interpolation method
     collapse_method: gaussian  # CVI-specific: Collapse method
     eval_termination: 1e-6  # Shared: Convergence threshold
-    max_iters: 5000  # CVI-specific: Max VI iterations
-    eval_episodes: 100  # Shared: Episodes for MC evaluation
+    max_iters: 200  # CVI-specific: Max VI iterations
+    eval_episodes: 200  # Shared: Episodes for MC evaluation
     max_steps: 200  # Shared: Max steps per MC episode
