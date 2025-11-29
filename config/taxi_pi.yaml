@@ -1,0 +1,19 @@
+env:
+  name: taxi
+  gamma: 0.99
+  kwargs: {}
+
+seed: 0
+
+training:
+  algorithm: pi
+  
+  pi:
+    module: cvi_rl.algorithms.tabular_pi
+    function: run_policy_iteration
+    gamma: 0.99  # Shared: Discount factor
+    eval_termination: 1e-6  # Shared: Convergence threshold
+    max_policy_eval_iters: 10000  # PI-specific: Max iterations per policy eval
+    max_policy_iters: 50  # PI-specific: Max policy improvement iterations
+    eval_episodes: 100  # Shared: Episodes for MC evaluation
+    max_steps: 200  # Shared: Max steps per MC episode

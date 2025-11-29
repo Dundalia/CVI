@@ -1,0 +1,179 @@
+from __future__ import annotations
+
+import argparse
+import sys
+from typing import Dict, Any
+import datetime
+
+import yaml
+import numpy as np
+import importlib
+import torch
+
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+
+from cvi_rl.envs.registry import make_env
+
+
+class ConfigLoader:    
+    @staticmethod
+    def load_yaml(config_path: str) -> Dict[str, Any]:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        return config if config is not None else {}
+    
+    @staticmethod
+    def parse_override(override_str: str) -> tuple[str, Any]:
+        key_path, value_str = override_str.split('=', 1)
+        
+        try:
+            value = yaml.safe_load(value_str)
+        except:
+            value = value_str
+            
+        return key_path, value
+    
+    @staticmethod
+    def set_nested(config: Dict, key_path: str, value: Any) -> None:
+        keys = key_path.split('.')
+        current = config
+        
+        for key in keys[:-1]:
+            if key not in current:
+                current[key] = {}
+            current = current[key]
+        
+        current[keys[-1]] = value
+    
+    @classmethod
+    def load(cls, config_path: str, overrides: list[str] = None) -> Dict[str, Any]:
+        config = cls.load_yaml(config_path)
+        if overrides:
+            for override in overrides:
+                key_path, value = cls.parse_override(override)
+                cls.set_nested(config, key_path, value)
+        return config
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Train RL algorithms',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Examples: python train.py config.yaml training.algorithm=tabular_cvi ")
+    
+    parser.add_argument(
+        'config',
+        nargs='?',
+        default='config.yaml',
+        help='Path to YAML configuration file (default: config.yaml)'
+    )
+    
+    parser.add_argument(
+        'overrides',
+        nargs='*',
+        help='Config overrides in format key.subkey=value'
+    )
+    
+    args = parser.parse_args()
+    
+    try:
+        config = ConfigLoader.load(args.config, args.overrides)
+    except FileNotFoundError:
+        print(f"Error: Config file '{args.config}' not found.")
+        return 1
+    except Exception as e:
+        print(f"Error loading config: {e}")
+        return 1
+    
+    seed = config.get('seed', 0)
+    np.random.seed(seed=seed)
+    torch.manual_seed(seed=seed)
+    print(f"Random seed set to: {seed}")
+    
+    env_config = config.get('env', {})
+    training_config = config.get('training', {})
+    logger_config = config.get('logger', {})
+    algorithm = training_config.get('algorithm')
+    
+    if not algorithm:
+        print("Error: No algorithm specified in config (training.algorithm)")
+        return 1
+    
+    wandb_run = None
+    logger_func = None
+    
+    if WANDB_AVAILABLE and logger_config.get('do', {}).get('online', False):
+        run_name = logger_config.get('run_name', None)
+        if run_name:
+            date_time = datetime.datetime.now().strftime("%d/%m-%H:%M:%S")
+            run_name = f"{run_name} {date_time}"
+        
+        wandb_run = wandb.init(
+            project=logger_config.get('project_name', 'CVI-RL'),
+            name=run_name,
+            config=config,
+            tags=logger_config.get('tags', []),
+            reinit=True
+        )
+        logger_func = lambda metrics, step=None: wandb.log(metrics, step=step)
+        print(f"W&B logging enabled: {logger_config.get('project_name')}")
+    else:
+        print("W&B logging disabled")
+    
+    env_name = env_config.get('name', 'taxi')
+    env_kwargs = env_config.get('kwargs', {})
+    
+    print(f"\nInitializing environment: {env_name}")
+    env_spec, env = make_env(env_name, **env_kwargs)
+    
+    algo_config = training_config.get(algorithm, {})
+    
+    module_path = algo_config.get('module')
+    function_name = algo_config.get('function')
+    
+    if not module_path or not function_name:
+        print(f"Error: Algorithm '{algorithm}' missing 'module' or 'function' in config")
+        print(f"Expected: training.{algorithm}.module and training.{algorithm}.function")
+        return 1
+        
+    module = importlib.import_module(module_path)
+    train_func = getattr(module, function_name)
+    
+    results = train_func(env_spec, env, algo_config, logger_func)
+    
+    if WANDB_AVAILABLE and wandb_run is not None:
+        wandb.summary.update(results['metrics'])
+    
+    if 'policy' in results:
+        policy_filename = f"{algorithm}_{env_name}_policy.npy"
+        np.save(f"saved_policies/{policy_filename}", results['policy'])
+        print(f"Policy saved to saved_policies/{policy_filename}")
+        
+        if wandb_run is not None:
+            artifact = wandb.Artifact(f"{algorithm}_{env_name}_policy", type="policy")
+            artifact.add_file(f"saved_policies/{policy_filename}")
+            wandb_run.log_artifact(artifact)
+            print(f"Policy uploaded to W&B as artifact: {algorithm}_{env_name}_policy")
+    
+    print("\n" + "="*60)
+    print("Training completed successfully!")
+    print("="*60)
+    
+    if 'metrics' in results:
+        print("\nFinal Metrics:")
+        for key, value in results['metrics'].items():
+            if isinstance(value, (int, float)):
+                print(f"  {key}: {value}")
+                
+    if wandb_run:
+        wandb.finish()
+    if env:
+        env.close()
+    
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())

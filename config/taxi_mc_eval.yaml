@@ -1,0 +1,17 @@
+# Configuration for Taxi Environment with Monte Carlo
+
+env:
+  name: taxi
+  gamma: 0.99
+  kwargs: {}
+
+seed: 0
+
+training:
+  algorithm: mc
+  
+  mc:
+    module: cvi_rl.algorithms.mc
+    function: run_monte_carlo
+    n_episodes: 20000
+    max_steps: 200

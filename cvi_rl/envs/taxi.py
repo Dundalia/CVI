@@ -89,7 +89,7 @@ def make_taxi_env(
     n_actions = env.action_space.n
 
     if initial_state is None:
-        initial_state = default_taxi_initial_state()
+        initial_state = 0  # Standardized initial state for fair comparison
 
     spec = TabularEnvSpec(
         n_states=n_states,

@@ -1,0 +1,21 @@
+env:
+  name: frozenlake-8x8
+  gamma: 0.99
+  kwargs:
+    map_name: "8x8"
+    is_slippery: true
+
+seed: 0
+
+training:
+  algorithm: vi
+  
+  vi:
+    module: cvi_rl.algorithms.tabular_vi
+    function: run_value_iteration
+    gamma: 0.99  # Shared: Discount factor
+    eval_termination: 1e-6  # Shared: Convergence threshold
+    max_policy_eval_iters: 10000  # PI-specific: Max iterations per policy eval
+    max_policy_iters: 5000  # PI-specific: Max policy improvement iterations
+    eval_episodes: 100  # Shared: Episodes for MC evaluation
+    max_steps: 200  # Shared: Max steps per MC episode
