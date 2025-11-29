@@ -9,6 +9,7 @@ training:
   algorithm: cvi
   
   cvi: 
+    gamma: 0.99  # Shared: Discount factor
     module: cvi_rl.algorithms.tabular_cvi
     function: run_cvi
     grid_strategy: piecewise_centered  # Tuned: Best grid construction

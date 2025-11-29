@@ -147,7 +147,7 @@ def run_value_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=None
     elapsed_time = time.time() - start_time
     
     states_to_evaluate = sample_initial_states(env, config['eval_episodes'])
-    vi_expected_from_reset = float(np.mean(V_values[states_to_evaluate]))
+    expected_v_from_initial_states = float(np.mean(V_values[states_to_evaluate]))
     
     print(f"First Evaluation: {np.mean(np.mean(v_history[0]))}")
 
@@ -155,7 +155,7 @@ def run_value_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=None
     metrics = {
         'training_time': elapsed_time,
         'converged_iterations': len(v_history),
-        'expected_initial_state_value': vi_expected_from_reset,
+        'expected_initial_state_value': expected_v_from_initial_states,
         "final_mean_v_value": float(np.mean(V_values))
     }
     
