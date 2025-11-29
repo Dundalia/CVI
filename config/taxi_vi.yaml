@@ -1,0 +1,18 @@
+env:
+  name: taxi
+  gamma: 0.99
+  kwargs: {}
+
+seed: 0
+
+training:
+  algorithm: vi
+  
+  vi:
+    module: cvi_rl.algorithms.tabular_vi
+    function: run_value_iteration
+    gamma: 0.99  # Shared: Discount factor
+    eval_termination: 1e-6  # Shared: Convergence threshold
+    max_policy_iters: 50  # VI-specific: Max value iteration iterations
+    eval_episodes: 100  # Shared: Episodes for MC evaluation
+    max_steps: 200  # Shared: Max steps per MC episode

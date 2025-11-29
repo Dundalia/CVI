@@ -13,8 +13,8 @@ def run_episode_with_policy(
     env: gym.Env,
     env_spec: TabularEnvSpec,
     policy: np.ndarray,
-    initial_state: Optional[int],
     gamma: float,
+    initial_state: int,
     max_steps: int,
 ) -> Tuple[float, bool, int]:
     """
@@ -28,9 +28,8 @@ def run_episode_with_policy(
         Tabular description of the environment.
     policy : np.ndarray
         Array of shape [n_states] mapping state -> action.
-    initial_state : int, optional
-        If provided, the environment state is forced to this value.
-        Otherwise, env_spec.initial_state is used if available, else the env's default reset.
+    initial_state: int
+        Initial state to start the episode from.
     gamma : float
         Discount factor for computing the return.
     max_steps : int
@@ -46,25 +45,12 @@ def run_episode_with_policy(
     steps : int
         Number of steps taken in the episode.
     """
-    # Reset env
-    reset_out = env.reset()
-    if isinstance(reset_out, tuple):
-        state, _ = reset_out
-    else:
-        state = reset_out
-
-    # Choose initial state
-    if initial_state is None:
-        initial_state = env_spec.initial_state if env_spec.initial_state is not None else state
-
-    # Force underlying state if supported (Taxi/FrozenLake style)
-    if hasattr(env.unwrapped, "s"):
-        env.unwrapped.s = initial_state
-        state = initial_state
-    else:
-        # fall back to whatever env.reset gave us
-        state = state
-
+    
+    
+    env.reset()
+    env.unwrapped.s = initial_state
+    state = initial_state
+    
     rewards: List[float] = []
     done = False
     steps = 0
@@ -91,7 +77,6 @@ def run_episode_with_policy(
     for t, r in enumerate(rewards):
         discounted_return += (gamma ** t) * r
 
-    # Generic "success": terminated with a positive final reward
     success = (steps > 0) and done and (last_reward > 0.0)
 
     return float(discounted_return), bool(success), int(steps)
@@ -101,8 +86,8 @@ def evaluate_policy_monte_carlo(
     env: gym.Env,
     env_spec: TabularEnvSpec,
     policy: np.ndarray,
-    initial_state: Optional[int],
     n_episodes: int,
+    states_to_evaluate: np.ndarray,
     gamma: float,
     max_steps: int,
     seed: Optional[int] = None,
@@ -118,8 +103,6 @@ def evaluate_policy_monte_carlo(
         Tabular environment spec (for initial_state, etc.).
     policy : np.ndarray
         Policy mapping state -> action.
-    initial_state : int, optional
-        Optional fixed starting state; falls back to env_spec.initial_state.
     n_episodes : int
         Number of Monte Carlo episodes.
     gamma : float
@@ -143,11 +126,10 @@ def evaluate_policy_monte_carlo(
     successes: List[bool] = []
     steps_list: List[int] = []
     
-    # Seed the environment if provided
     if seed is not None:
         env.reset(seed=seed)
 
-    for _ in tqdm(range(n_episodes), desc="MC Evaluation"):
+    for _, initial_state in zip(tqdm(range(n_episodes), desc="MC Evaluation"), states_to_evaluate):
         disc_return, success, steps = run_episode_with_policy(
             env,
             env_spec,
@@ -227,7 +209,6 @@ def run_monte_carlo(env_spec: TabularEnvSpec, env: gym.Env, config: dict, logger
         env,
         env_spec,
         policy,
-        initial_state=None,
         n_episodes=n_episodes,
         gamma=gamma,
         max_steps=max_steps
