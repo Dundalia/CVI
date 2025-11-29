@@ -277,17 +277,14 @@ def cvi_action_evaluation_from_V(
             f"V_cf shape {V_cf.shape} incompatible with (n_states, K)=({n_states}, {K})."
         )
 
-    #! 1) Reward CF CF_R(s,a,ω)
-    #!reward_cf_sa = compute_immediate_reward_cf_state_action_frequency(env_spec, omegas)  # [n_states, n_actions, K]
-
-    # 2) Compute V(s, gamma * ω) via interpolation necessary for L2 loss bootstrapping
+    # 1) Compute V(s, gamma * ω) via interpolation necessary for L2 loss bootstrapping
     scaled_omegas = gamma * omegas
     V_cf_gamma = np.zeros_like(V_cf)
 
     for s in range(n_states):
         V_cf_gamma[s] = interpolate_cf(scaled_omegas, omegas, V_cf[s], interp_method, **interp_kwargs)
 
-    # 3) Build Q_cf(s,a,ω) via Bellman equation in CF-domain
+    # 2) Build Q_cf(s,a,ω) via Bellman equation in CF-domain
     Q_cf = np.zeros((n_states, n_actions, K), dtype=complex)
     
     for s in range(n_states):
@@ -430,31 +427,7 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
         }
         
         if logger:
-            try:
-                fig, ax = plt.subplots(figsize=(10, 6))
-                
-                # Plot MC Histogram
-                ax.hist(returns, bins=50, density=True, alpha=0.5, color='gray', label='Monte Carlo (Ground Truth)')
-                
-                # Plot CVI PDF for State 0 (assuming it's the start state)
-                target_state = 0
-                xs, pdf = get_pdf_from_cf(omegas, V_cf[target_state])
-                ax.plot(xs, pdf, color='blue', linewidth=2, label=f'CVI Estimate (State {target_state})')
-                
-                ax.set_xlim(-2, 2)
-                ax.set_title(f"Return Distribution Comparison (State {target_state})")
-                ax.set_xlabel("Return")
-                ax.set_ylabel("Density")
-                ax.legend()
-                ax.grid(True, alpha=0.3)
-                
-                # Log to wandb
-                if wandb and wandb.run:
-                    logger({'distribution_plot': wandb.Image(fig)})
-                
-                plt.close(fig)
-            except Exception as e:
-                print(f"Warning: Could not generate distribution plot: {e}")
+            plot_cdf_comparison(logger, returns, omegas, V_cf, wandb)
 
     else:
         mc_metrics = {}
@@ -488,25 +461,75 @@ def get_pdf_from_cf(omegas: np.ndarray, cf: np.ndarray) -> Tuple[np.ndarray, np.
     d_omega = omegas[1] - omegas[0]
     K = len(omegas)
     
-    # 1. Shift CF for IFFT (assuming omegas are centered around 0)
+    # 1. Shift CF so that omega=0 is at index 0
+    # omegas are assumed to be sorted [-W, ..., W]
     cf_shifted = np.fft.ifftshift(cf)
     
-    # 2. Inverse FFT to get PDF
-    # We multiply by K/range to normalize, but for visualization relative shape matters most
-    pdf_complex = np.fft.ifft(cf_shifted)
+    # 2. Invert CF to get PDF
+    # We use FFT because the inversion integral has e^{-i omega x}
+    # which matches the FFT kernel e^{-i 2pi k m / N}.
+    # (IFFT uses e^{+i ...} which would give f(-x))
+    pdf_complex = np.fft.fft(cf_shifted)
     pdf_real = np.real(pdf_complex)
     
-    # 3. Shift PDF to center the domain
+    # 3. Shift PDF so that x=0 is at the center
     pdf_real = np.fft.fftshift(pdf_real)
     
     # 4. Construct x-axis (Return values)
-    # The span of the spatial domain is 2*pi / d_omega
+    # The range of x is determined by the sampling rate d_omega
     L = 2 * np.pi / d_omega
     xs = np.linspace(-L/2, L/2, K, endpoint=False)
     
-    # 5. Normalize to sum to 1 (to treat as probabilities/counts for histogram)
-    # Clip negatives that might appear due to numerical noise
+    # 5. Normalize to sum to 1
     pdf_real = np.maximum(pdf_real, 0)
     pdf_real = pdf_real / (np.sum(pdf_real) + 1e-9)
     
     return xs, pdf_real
+
+def plot_cdf_comparison(logger, returns, omegas, V_cf, wandb_module):
+    try:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # 1. Plot MC Empirical CDF
+        sorted_returns = np.sort(returns)
+        yvals = np.arange(len(sorted_returns)) / float(len(sorted_returns) - 1)
+        ax.step(sorted_returns, yvals, color='gray', linestyle='--', label='Monte Carlo (Ground Truth)', where='post')
+        
+        # 2. Plot CVI CDF for State 0
+        target_state = 0
+        
+        # Check if grid is uniform
+        is_uniform = np.allclose(np.diff(omegas), omegas[1] - omegas[0], atol=1e-6)
+        
+        if is_uniform:
+            # Use directly
+            xs, pdf = get_pdf_from_cf(omegas, V_cf[target_state])
+        else:
+            # Resample to uniform grid covering the SAME range
+            W = np.max(np.abs(omegas))
+            K_plot = 4096 # Sufficiently dense
+            omegas_plot = np.linspace(-W, W, K_plot)
+            cf_plot = interpolate_cf(omegas_plot, omegas, V_cf[target_state], method="polar")
+            xs, pdf = get_pdf_from_cf(omegas_plot, cf_plot)
+        
+        # Compute CDF from PDF
+        cdf = np.cumsum(pdf)
+        if cdf[-1] > 0:
+            cdf = cdf / cdf[-1]  # Normalize
+        
+        ax.plot(xs, cdf, color='blue', linewidth=2, label=f'CVI Estimate (State {target_state})')
+        
+        ax.set_xlim(0, 1.0) # FrozenLake returns are usually in [0, 1]
+        ax.set_title(f"Return CDF Comparison (State {target_state})")
+        ax.set_xlabel("Return")
+        ax.set_ylabel("Cumulative Probability")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        # Log to wandb
+        if wandb_module and wandb_module.run:
+            logger({'distribution_plot': wandb_module.Image(fig)})
+        
+        plt.close(fig)
+    except Exception as e:
+        print(f"Warning: Could not generate distribution plot: {e}")

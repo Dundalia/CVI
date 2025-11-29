@@ -282,39 +282,7 @@ def run_c51(env_spec: TabularEnvSpec, env, config: Dict[str, Any], logger=None):
         )
 
         if logger:
-            try:
-                fig, ax = plt.subplots(figsize=(10, 6))
-                
-                # Plot MC Histogram
-                ax.hist(returns, bins=50, density=True, alpha=0.5, color='gray', label='Monte Carlo (Ground Truth)')
-                
-                # Plot C51 Distribution for State 0
-                target_state = 0
-                # Get distribution for the chosen action at this state
-                action = policy[target_state]
-                probs = Z[target_state, action]
-                
-                # Plot as bar/stem or line. Since atoms are discrete, bar is good but might be too thin.
-                # Let's use plot with markers.
-                # To make it comparable to density, we need to divide by bin width (delta_z)
-                delta_z = atoms[1] - atoms[0]
-                density = probs / delta_z
-                
-                ax.plot(atoms, density, color='red', linewidth=2, label=f'C51 Estimate (State {target_state})')
-                
-                ax.set_xlim(-2, 2)
-                ax.set_title(f"Return Distribution Comparison (State {target_state})")
-                ax.set_xlabel("Return")
-                ax.set_ylabel("Density")
-                ax.legend()
-                ax.grid(True, alpha=0.3)
-                
-                if wandb and wandb.run:
-                    logger({'distribution_plot': wandb.Image(fig)})
-                
-                plt.close(fig)
-            except Exception as e:
-                print(f"Warning: Could not generate distribution plot: {e}")
+            plot_cdf_comparison(logger, returns, atoms, Z, policy, wandb)
 
     if logger:
         logger(metrics)
@@ -327,3 +295,38 @@ def run_c51(env_spec: TabularEnvSpec, env, config: Dict[str, Any], logger=None):
         "V_mean": V_mean,   # [S]
         "metrics": metrics,
     }
+
+
+def plot_cdf_comparison(logger, returns, atoms, Z, policy, wandb_module):
+    try:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # 1. Plot MC Empirical CDF
+        sorted_returns = np.sort(returns)
+        yvals = np.arange(len(sorted_returns)) / float(len(sorted_returns) - 1)
+        ax.step(sorted_returns, yvals, color='gray', linestyle='--', label='Monte Carlo (Ground Truth)', where='post')
+        
+        # 2. Plot C51 CDF for State 0
+        target_state = 0
+        action = policy[target_state]
+        probs = Z[target_state, action]
+        
+        # Compute CDF
+        cdf = np.cumsum(probs)
+        
+        # Plot as a step function
+        ax.step(atoms, cdf, color='red', linewidth=2, label=f'C51 Estimate (State {target_state})', where='post')
+        
+        ax.set_xlim(0, 1.0) # FrozenLake returns are usually in [0, 1]
+        ax.set_title(f"Return CDF Comparison (State {target_state})")
+        ax.set_xlabel("Return")
+        ax.set_ylabel("Cumulative Probability")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        if wandb_module and wandb_module.run:
+            logger({'distribution_plot': wandb_module.Image(fig)})
+        
+        plt.close(fig)
+    except Exception as e:
+        print(f"Warning: Could not generate distribution plot: {e}")
