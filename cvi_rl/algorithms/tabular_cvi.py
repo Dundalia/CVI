@@ -139,8 +139,6 @@ def cvi_policy_evaluation(
     grid_strategy: GridStrategy = "uniform",
     W: float = 8.0,
     K: int = 256,
-    w_center: float = 3.0,
-    frac_center: float = 0.9,
     eps: float = 1e-5,
     max_iters: int = 200,
     return_omegas: bool = True,
@@ -173,8 +171,6 @@ def cvi_policy_evaluation(
         strategy=grid_strategy,
         W=W,
         K=K,
-        w_center=w_center,
-        frac_center=frac_center,
     )
 
     K = len(omegas)

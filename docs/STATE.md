@@ -133,8 +133,8 @@ A comprehensive hyperparameter grid search was conducted to evaluate the perform
 **Experimental Design**:
 - **Environment**: Taxi-v3 (500 states, 6 actions)
 - **Baseline**: Classical Value Iteration with γ=0.9
-- **Configurations tested**: 264 successful combinations (after removing Savgol, fixing PCHIP) spanning:
-  - Grid strategies: uniform, piecewise-centered, logarithmic, chebyshev, adaptive
+- **Configurations tested**: 360 combinations spanning:
+  - Grid strategies: uniform, two_density_regions, three_density_regions, four_density_regions, exponential_decay, linear_decay, quadratic_decay
   - Frequency ranges (W): 10.0, 20.0
   - Grid sizes (K): 128, 256, 512
   - Interpolation methods: linear, polar, pchip, lanczos
@@ -143,30 +143,50 @@ A comprehensive hyperparameter grid search was conducted to evaluate the perform
 - **Goal**: Identify which combinations of methods allow CVI to exactly recover the optimal policy
 
 **Key Findings**:
-Grid search experiments (264 successful configurations on Taxi-v3) revealed:
-- **Best configuration**: adaptive/piecewise-centered grid + polar interpolation + gaussian collapse
-  - Achieves near-zero error (MAE ≈ 10⁻¹⁵, exact match with VI)
-- **Grid strategy impact**: Adaptive (1.61) > Piecewise-centered (1.76) > Logarithmic (1.97) > Chebyshev (4.98) > Uniform (6.09)
-  - **Adaptive is the clear winner** with zero hyperparameters - automatically concentrates density near ω=0
-  - Appears in 20/75 excellent configs (most of any strategy)
-  - Chebyshev improved after fixes but still poor (wrong density distribution for CVI)
-- **Interpolation impact**: Linear (2.93) ≈ Polar (2.90) ≈ PCHIP (2.98) << Lanczos (5.34)
-  - Surprise: Simple methods work just as well as sophisticated ones
-  - Polar appears in all top 5 configs (best peak performance)
-  - Lanczos significantly underperforms despite theoretical advantages
-- **Collapse method impact**: Gaussian (2.08) >> LS (3.34) >> FFT (11.81)
-  - Gaussian dominates excellent configs: 72/75 (96%)
-- **Grid size impact**: Larger K consistently better: K=512 (2.50) > K=256 (3.30) > K=128 (4.81)
-  - Previous concerns about larger K were artifacts of buggy methods (Savgol, pre-fix PCHIP)
+Comprehensive experiments on 360 configurations revealed a **paradigm-shifting insight**: grid strategy and hyperparameters have minimal impact - **method combination is everything**.
 
-**Robustness Analysis (MSE/RMSE metrics)**:
-MSE and RMSE reveal critical insights about method stability beyond average performance:
-- **Uniform grid has dangerous instability**: MSE std = 1216 (4.7x mean) - contains "landmine" configurations with catastrophic errors
-- **PCHIP has hidden variance**: MSE std = 1236 despite similar MAE to linear/polar - unreliable despite good average
-- **Adaptive grid most robust**: MSE std = 20.6 (only 1.6x mean) - consistently good across all settings
-- **Gaussian collapse most stable**: RMSE/MAE ratio = 1.23 (lowest) - errors are tightly bounded and predictable
-- **FFT has outlier problem**: RMSE/MAE ratio = 1.61 - frequently produces large unpredictable errors
-- **K=128 fundamentally unstable**: MSE std = 1104 vs K=512 std = 55 - certain method combinations hit pathological cases
-- **Polar interpolation dominates**: Lowest MSE (37.2) and good variance (71.7) - both accurate AND stable
+**The Dominant Discovery**:
+- **Polar + Gaussian**: 33 of top 40 configs (82.5%) achieve MAE ~10⁻¹⁵ (machine precision)
+  - Works with **ALL grid strategies** - even uniform achieves MAE ~10⁻¹⁴ with this combination
+  - Best single config: four_density_regions + polar + gaussian (MAE = 1.27×10⁻¹⁵)
+  - Even K=128 achieves MAE ~10⁻¹⁵ with proper methods
 
-**Critical insight**: MAE alone is misleading. Methods need both good average performance AND low variance for production use. The winning combination (adaptive + polar + Gaussian) excels on both dimensions.
+**Catastrophic Failure Modes**:
+- **FFT collapse**: Dominates 27 of worst 40 configs (67.5%) with MAE = 7-27
+  - Fails across ALL grid strategies and interpolation methods
+  - Worst config: uniform + pchip + fft (MAE = 26.6)
+- **Lanczos + LS**: Another failure mode - 13 of worst 40 configs (MAE = 6-8)
+  - Consistent failure across all grid strategies
+
+**Grid Strategy Impact** (with polar + gaussian):
+ALL strategies achieve excellent performance when properly configured:
+- **Four density regions**: MAE = 1.27×10⁻¹⁵ (best)
+- **Linear decay**: MAE = 1.99×10⁻¹⁵
+- **Quadratic decay**: MAE = 2.19×10⁻¹⁵
+- **Three density regions**: MAE = 2.26×10⁻¹⁵
+- **Two density regions**: MAE = 2.28×10⁻¹⁵
+- **Exponential decay**: MAE = 2.99×10⁻¹⁵
+- **Even uniform**: MAE = 3.18×10⁻¹⁴ (acceptable!)
+
+Conversely, even sophisticated grids fail with bad methods (e.g., four_density_regions + lanczos + ls: MAE = 7.2).
+
+**Method Hierarchy**:
+1. **Collapse method**: THE critical factor (8+ orders of magnitude difference)
+   - Gaussian: MAE ~10⁻¹⁵ (mandatory)
+   - LS: MAE ~10⁻⁷ (acceptable fallback)
+   - FFT: MAE ~10+ (catastrophic - never use)
+
+2. **Interpolation method**: Essential enabler for Gaussian
+   - Polar: Required for top performance (100% of top configs)
+   - Others: Acceptable with LS, catastrophic with FFT
+
+3. **Grid strategy**: Minimal impact with proper methods
+   - All strategies work with polar + gaussian
+   - All strategies fail with FFT or lanczos + LS
+
+4. **Hyperparameters (K, W)**: Surprisingly unimportant
+   - K=128 achieves MAE ~10⁻¹⁵ with polar + gaussian
+   - K=512 achieves MAE ~11 with FFT
+   - Both W=10.0 and W=20.0 equivalent
+
+**Critical insight**: The dramatic performance differences are NOT gradual - they're cliffs. Polar+Gaussian vs FFT is not "somewhat better" - it's 8-15 orders of magnitude better. Method choice determines success or catastrophic failure; everything else is secondary tuning.

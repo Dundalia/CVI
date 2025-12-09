@@ -85,13 +85,13 @@ def estimate_mean_fft(
     K = len(omegas)
     xs = np.fft.fftfreq(K, d=d_omega / (2 * np.pi))
     
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(8, 5))
-    plt.plot(xs, pdf_real, 'o-', markersize=2)
-    plt.xlabel('Returns (x)')
-    plt.ylabel('PDF p_G(x)')
-    plt.title('Return Distribution from Inverse FFT of CF')
-    plt.grid(True)
+    # import matplotlib.pyplot as plt
+    # plt.figure(figsize=(8, 5))
+    # plt.plot(xs, pdf_real, 'o-', markersize=2)
+    # plt.xlabel('Returns (x)')
+    # plt.ylabel('PDF p_G(x)')
+    # plt.title('Return Distribution from Inverse FFT of CF')
+    # plt.grid(True)
     # plt.show()
 
     

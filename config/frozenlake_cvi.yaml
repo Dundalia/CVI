@@ -14,7 +14,7 @@ training:
     module: cvi_rl.algorithms.tabular_cvi
     function: run_cvi
     gamma: 0.99   # Shared: Discount factor
-    grid_strategy: piecewise_centered  # CVI-specific: Grid construction
+    grid_strategy: two_density_regions  # CVI-specific: Grid construction
     W: 200.0  # CVI-specific: Frequency range [-W, W]
     K: 4096  # CVI-specific: Number of grid points
     interp_method: polar  # CVI-specific: Interpolation method

@@ -8,7 +8,6 @@ import numpy as np
 from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
 from tqdm import tqdm
 import time
-import numpy as np
 from cvi_rl.algorithms.mc import evaluate_policy_monte_carlo
 from cvi_rl.algorithms.utils import sample_initial_states
 

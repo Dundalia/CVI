@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, List
 
 import numpy as np
 
-GridStrategy = Literal["uniform", "piecewise_centered", "logarithmic", "chebyshev", "adaptive"]
+GridStrategy = Literal[
+    "uniform",
+    "two_density_regions",
+    "three_density_regions",
+    "four_density_regions",
+    "exponential_decay",
+    "linear_decay",
+    "quadratic_decay",
+]
 
 
 def make_uniform_grid(W: float, K: int) -> np.ndarray:
@@ -28,81 +36,276 @@ def make_uniform_grid(W: float, K: int) -> np.ndarray:
     return np.linspace(-W, W, K)
 
 
-def make_piecewise_centered_grid(
+def make_multi_density_regions_grid(
     W: float,
     K: int,
-    w_center: float,
-    frac_center: float,
+    boundaries: List[float],
+    fractions: List[float],
 ) -> np.ndarray:
     """
-    Piecewise non-uniform grid, denser near 0:
-
-      - A dense "center" region in [-w_center, w_center]
-      - Two coarser "tail" regions in [-W, -w_center) and (w_center, W]
-
+    Multi-region grid with configurable density levels from center to tails.
+    
+    Creates a symmetric grid around 0 with N density regions, where N = len(fractions).
+    The innermost region is the densest, with decreasing density toward the tails.
+    
     Parameters
     ----------
     W : float
-        Overall max frequency range (grid in [-W, W]).
+        Maximum absolute frequency (grid spans [-W, W]).
     K : int
-        Total number of points.
-    w_center : float
-        Half-width of the dense central region.
-    frac_center : float
-        Fraction of grid points assigned to the central region (0 < frac_center < 1).
-
+        Total number of grid points.
+    boundaries : List[float]
+        Relative boundary positions as fractions of W, from inner to outer.
+        For N regions, provide N-1 boundaries.
+        Example: [0.1, 0.4] means boundaries at ±0.1W and ±0.4W (3 regions).
+    fractions : List[float]
+        Fraction of total points K allocated to each region, from inner to outer.
+        Must sum to 1.0 and have length = len(boundaries) + 1.
+        Example: [0.5, 0.3, 0.2] allocates 50% to center, 30% to middle, 20% to tails.
+    
     Returns
     -------
     omegas : np.ndarray
-        Sorted 1D array of shape [K].
+        1D array of shape [K], with multi-density regions in [-W, W].
+    
+    Examples
+    --------
+    >>> # Two regions: dense center (90%) + sparse tails (10%)
+    >>> omegas = make_multi_density_regions_grid(W=10.0, K=256, 
+    ...     boundaries=[0.3], fractions=[0.9, 0.1])
+    >>> 
+    >>> # Three regions: 50% center, 30% middle, 20% tails
+    >>> omegas = make_multi_density_regions_grid(W=10.0, K=256,
+    ...     boundaries=[0.1, 0.4], fractions=[0.5, 0.3, 0.2])
     """
-    if not (0.0 < frac_center < 1.0):
-        raise ValueError(f"frac_center must be in (0,1), got {frac_center}")
-
-    K_center = int(frac_center * K)
-    K_center = max(3, min(K - 2, K_center))  # ensure room for tails
-
-    K_tail_each = max(1, (K - K_center) // 2)
-
-    # Center region (dense)
-    omegas_center = np.linspace(-w_center, w_center, K_center, endpoint=True)
-
-    # Tails (coarser), avoid duplicating endpoints
-    omegas_left = np.linspace(-W, -w_center, K_tail_each, endpoint=False)
-    omegas_right = np.linspace(w_center, W, K_tail_each, endpoint=False)
-
-    omegas = np.concatenate([omegas_left, omegas_center, omegas_right])
-
-    # Adjust length to exactly K (clip or pad if needed)
+    n_regions = len(fractions)
+    
+    # Validate inputs
+    if len(boundaries) != n_regions - 1:
+        raise ValueError(
+            f"Expected {n_regions - 1} boundaries for {n_regions} regions, "
+            f"got {len(boundaries)}"
+        )
+    
+    if abs(sum(fractions) - 1.0) > 1e-6:
+        raise ValueError(f"Fractions must sum to 1.0, got {sum(fractions)}")
+    
+    # Convert relative boundaries to absolute values
+    abs_boundaries = [W * b for b in boundaries]
+    
+    # Build region edges: [0, w1, w2, ..., W]
+    region_edges = [0.0] + abs_boundaries + [W]
+    
+    # Allocate points to each region
+    K_per_region = []
+    K_remaining = K
+    for i, frac in enumerate(fractions[:-1]):
+        k = max(2 if i > 0 else 3, int(frac * K))  # min 3 for center, 2 for others
+        K_per_region.append(k)
+        K_remaining -= k
+    K_per_region.append(max(2, K_remaining))  # Last region gets remainder
+    
+    # Build grid segments for each region
+    segments = []
+    
+    for i in range(n_regions):
+        inner_edge = region_edges[i]
+        outer_edge = region_edges[i + 1]
+        k_region = K_per_region[i]
+        
+        if i == 0:
+            # Center region: symmetric around 0, includes both endpoints
+            center = np.linspace(-inner_edge if inner_edge > 0 else -outer_edge, 
+                                  inner_edge if inner_edge > 0 else outer_edge, 
+                                  k_region)
+            # For center region, we use the outer edge as the boundary
+            center = np.linspace(-outer_edge, outer_edge, k_region)
+            segments.append(center)
+        else:
+            # Non-center regions: split into left and right halves
+            k_half = k_region // 2
+            
+            # Left side: [-outer_edge, -inner_edge)
+            left = np.linspace(-outer_edge, -inner_edge, k_half, endpoint=False)
+            
+            # Right side: [inner_edge, outer_edge) or [inner_edge, outer_edge] for last
+            if i == n_regions - 1:
+                # Last region includes the endpoint W
+                right = np.linspace(inner_edge, outer_edge, k_region - k_half, endpoint=True)
+            else:
+                right = np.linspace(inner_edge, outer_edge, k_region - k_half, endpoint=False)
+            
+            segments.insert(0, left)  # Add left to beginning
+            segments.append(right)    # Add right to end
+    
+    # Combine all segments
+    omegas = np.concatenate(segments)
+    
+    # Adjust to exactly K points if needed
     if len(omegas) > K:
         omegas = omegas[:K]
     elif len(omegas) < K:
-        pad_needed = K - len(omegas)
-        pad_left = pad_needed // 2
-        pad_right = pad_needed - pad_left
-
-        left_pad = np.linspace(-W, omegas[0], pad_left + 1, endpoint=False)
-        right_pad = np.linspace(omegas[-1], W, pad_right + 1, endpoint=True)[1:]
-
-        omegas = np.concatenate([left_pad, omegas, right_pad])
-
-    # Ensure strictly increasing (remove duplicates and sort)
-    omegas = np.unique(omegas)
+        # Pad uniformly in the largest gap
+        omegas = np.sort(omegas)
+        while len(omegas) < K:
+            gaps = np.diff(omegas)
+            max_gap_idx = np.argmax(gaps)
+            insert_point = (omegas[max_gap_idx] + omegas[max_gap_idx + 1]) / 2
+            omegas = np.sort(np.append(omegas, insert_point))
+        omegas = omegas[:K]
     
-    # If we lost points due to duplicates, we might have fewer than K
-    # This is acceptable - strictly increasing is more important
+    # Ensure strictly increasing (remove duplicates)
+    omegas = np.unique(omegas)
     return omegas
 
 
-def make_logarithmic_grid(
+def make_two_density_regions_grid(
+    W: float,
+    K: int,
+    boundaries: List[float] = None,
+    fractions: List[float] = None,
+) -> np.ndarray:
+    """
+    Two-region grid: dense center + sparse tails.
+    
+    Default allocation:
+    - Center (90% of points in inner 30% of range)
+    - Tails (10% of points in outer 70% of range)
+    
+    Parameters
+    ----------
+    W : float
+        Maximum absolute frequency (grid spans [-W, W]).
+    K : int
+        Total number of grid points.
+    boundaries : List[float], optional
+        Relative boundary position [center_edge] as fraction of W.
+        Default: [0.3].
+    fractions : List[float], optional
+        Point allocation fractions [center, tails].
+        Default: [0.9, 0.1].
+    
+    Returns
+    -------
+    omegas : np.ndarray
+        1D array of shape [K], with two density regions in [-W, W].
+    """
+    if boundaries is None:
+        boundaries = [0.3]
+    if fractions is None:
+        fractions = [0.9, 0.1]
+    
+    return make_multi_density_regions_grid(
+        W=W,
+        K=K,
+        boundaries=boundaries,
+        fractions=fractions,
+    )
+
+
+def make_three_density_regions_grid(
+    W: float,
+    K: int,
+    boundaries: List[float] = None,
+    fractions: List[float] = None,
+) -> np.ndarray:
+    """
+    Three-region grid: very dense center, medium middle, sparse tails.
+    
+    Default allocation:
+    - Center (50% of points in inner 10% of range)
+    - Middle (30% of points in next 30% of range)  
+    - Tails (20% of points in outer 60% of range)
+    
+    Parameters
+    ----------
+    W : float
+        Maximum absolute frequency (grid spans [-W, W]).
+    K : int
+        Total number of grid points.
+    boundaries : List[float], optional
+        Relative boundary positions [inner, outer] as fractions of W.
+        Default: [0.1, 0.4].
+    fractions : List[float], optional
+        Point allocation fractions [center, middle, tails].
+        Default: [0.5, 0.3, 0.2].
+    
+    Returns
+    -------
+    omegas : np.ndarray
+        1D array of shape [K], with three density regions in [-W, W].
+    """
+    if boundaries is None:
+        boundaries = [0.1, 0.4]
+    if fractions is None:
+        fractions = [0.5, 0.3, 0.2]
+    
+    return make_multi_density_regions_grid(
+        W=W,
+        K=K,
+        boundaries=boundaries,
+        fractions=fractions,
+    )
+
+
+def make_four_density_regions_grid(
+    W: float,
+    K: int,
+    boundaries: List[float] = None,
+    fractions: List[float] = None,
+) -> np.ndarray:
+    """
+    Four-region grid: very dense center, dense inner-mid, medium outer-mid, sparse tails.
+    
+    Default allocation:
+    - Center (40% of points in inner 5% of range)
+    - Inner-middle (30% of points in next 10% of range)
+    - Outer-middle (20% of points in next 25% of range)
+    - Tails (10% of points in outer 60% of range)
+    
+    Parameters
+    ----------
+    W : float
+        Maximum absolute frequency (grid spans [-W, W]).
+    K : int
+        Total number of grid points.
+    boundaries : List[float], optional
+        Relative boundary positions [inner, mid, outer] as fractions of W.
+        Default: [0.05, 0.15, 0.4].
+    fractions : List[float], optional
+        Point allocation fractions [center, inner-mid, outer-mid, tails].
+        Default: [0.4, 0.3, 0.2, 0.1].
+    
+    Returns
+    -------
+    omegas : np.ndarray
+        1D array of shape [K], with four density regions in [-W, W].
+    """
+    if boundaries is None:
+        boundaries = [0.05, 0.15, 0.4]
+    if fractions is None:
+        fractions = [0.4, 0.3, 0.2, 0.1]
+    
+    return make_multi_density_regions_grid(
+        W=W,
+        K=K,
+        boundaries=boundaries,
+        fractions=fractions,
+    )
+
+
+def make_exponential_decay_grid(
     W: float,
     K: int,
     lam: float = 2.0,
 ) -> np.ndarray:
     """
-    Logarithmic spacing from origin, dense near 0 and sparse in tails.
+    Exponential density decay from origin, dense near 0 and sparse in tails.
     
     Uses exponential spacing: ω = ±W · (exp(k·λ/K_half) - 1) / (exp(λ) - 1)
+    
+    The exponent λ controls concentration at the center. Use λ > 1 for 
+    concentration near ω=0 (higher values = stronger concentration).
     
     Parameters
     ----------
@@ -111,14 +314,15 @@ def make_logarithmic_grid(
     K : int
         Number of points (should be even for symmetry).
     lam : float
-        Decay rate parameter. Higher λ → more points near 0.
-        λ=0 gives uniform, λ→∞ gives all points at 0.
+        Exponential decay rate parameter. Must be > 1 for concentration at center.
+        Higher λ → more points near 0 (stronger concentration).
+        λ ≈ 1 approaches uniform, λ >> 1 concentrates heavily at 0.
         Default: 2.0 (good balance).
     
     Returns
     -------
     omegas : np.ndarray
-        1D array of shape [K], logarithmically spaced in [-W, W].
+        1D array of shape [K], with exponential density decay in [-W, W].
     """
     K_half = K // 2
     
@@ -155,150 +359,163 @@ def make_logarithmic_grid(
     return np.sort(omegas)
 
 
-def make_chebyshev_grid(
+def make_linear_decay_grid(
     W: float,
     K: int,
+    alpha: float = 2.0,
 ) -> np.ndarray:
     """
-    Chebyshev nodes (Chebyshev points of the first kind) in [-W, W].
+    Power-law density decay from origin, dense near 0 and sparser in tails.
     
-    These are the zeros of the Chebyshev polynomial T_K(x).
-    Minimizes Runge phenomenon in polynomial interpolation.
-    Naturally denser near boundaries ±W and also relatively dense near 0.
+    Uses power-law spacing with exponent α: ω = ±W · (k/K_half)^α
     
-    Formula: ω_k = W · cos(π(2k-1)/(2K)) for k = 1,...,K
+    The exponent α controls concentration at the center. Use α > 1 for 
+    concentration near ω=0 (higher values = stronger concentration).
     
     Parameters
     ----------
     W : float
         Maximum absolute frequency.
     K : int
-        Number of points.
+        Number of points (should be even for symmetry).
+    alpha : float
+        Power-law exponent. Must be > 1 for concentration at center.
+        Higher α → more points near 0 (stronger concentration).
+        α = 1 gives uniform spacing, α >> 1 concentrates heavily at 0.
+        Default: 2.0.
     
     Returns
     -------
     omegas : np.ndarray
-        1D array of shape [K], Chebyshev nodes in [-W, W].
+        1D array of shape [K], with power-law density decay in [-W, W].
     """
-    k = np.arange(1, K + 1)
-    # Chebyshev nodes in [-1, 1]
-    nodes = np.cos(np.pi * (2 * k - 1) / (2 * K))
-    # Scale to [-W, W]
-    omegas = W * nodes
-    return np.sort(omegas)
-
-
-def make_adaptive_grid(
-    W: float,
-    K: int,
-    refinement_regions: int = 3,
-) -> np.ndarray:
-    """
-    Adaptive grid with multiple density regions.
+    K_half = K // 2
     
-    This is a simplified adaptive grid that pre-allocates points based on
-    expected CF behavior. For true adaptive refinement, this would need
-    to be called iteratively during CVI with curvature feedback.
+    if alpha <= 0:
+        raise ValueError(f"alpha must be positive, got {alpha}")
     
-    The grid has three regions with different densities:
-    - Very dense near 0 (where mean extraction happens)
-    - Medium dense in middle region (where CF transitions)
-    - Sparse in tails (where CF decays/oscillates rapidly)
+    if abs(alpha - 1.0) < 1e-6:
+        # alpha=1 gives uniform spacing
+        return np.linspace(-W, W, K)
     
-    Parameters
-    ----------
-    W : float
-        Maximum absolute frequency.
-    K : int
-        Number of points.
-    refinement_regions : int
-        Number of density regions (default: 3).
+    # Create positive half using power-law spacing
+    # k ranges from 0 to K_half
+    k = np.arange(K_half + 1)
     
-    Returns
-    -------
-    omegas : np.ndarray
-        1D array of shape [K], adaptively spaced in [-W, W].
-    """
-    # Allocate points across regions with decreasing density
-    # Region 1: [-w1, w1] - very dense (50% of points in 20% of range)
-    # Region 2: [-w2, -w1] and [w1, w2] - medium (30% of points in 30% of range)  
-    # Region 3: [-W, -w2] and [w2, W] - sparse (20% of points in 50% of range)
+    # Power-law transform: maps [0, K_half] → [0, W]
+    # with higher density near 0 when alpha > 1
+    scale = (k / K_half) ** alpha
+    omegas_pos = W * scale
     
-    w1 = W * 0.1  # Inner boundary (10% of range)
-    w2 = W * 0.4  # Outer boundary (40% of range)
+    # Mirror for negative half
+    omegas_neg = -omegas_pos[1:][::-1]
+    omegas = np.concatenate([omegas_neg, omegas_pos])
     
-    # Allocate points
-    K1 = int(0.5 * K)  # Very dense near 0
-    K2 = int(0.3 * K)  # Medium in middle
-    K3 = K - K1 - K2   # Sparse in tails
-    
-    # Ensure minimum points in each region
-    K1 = max(3, K1)
-    K2 = max(2, K2)
-    K3 = max(2, K3)
-    
-    # Build grid segments
-    # Center: [-w1, w1]
-    center = np.linspace(-w1, w1, K1)
-    
-    # Middle regions: [-w2, -w1] and [w1, w2]
-    K2_half = K2 // 2
-    middle_left = np.linspace(-w2, -w1, K2_half, endpoint=False)
-    middle_right = np.linspace(w1, w2, K2_half, endpoint=False)
-    
-    # Tail regions: [-W, -w2] and [w2, W]
-    K3_half = K3 // 2
-    tail_left = np.linspace(-W, -w2, K3_half, endpoint=False)
-    tail_right = np.linspace(w2, W, K3 - K3_half, endpoint=True)
-    
-    # Combine all regions
-    omegas = np.concatenate([tail_left, middle_left, center, middle_right, tail_right])
-    
-    # Adjust to exactly K points
+    # Ensure exactly K points
     if len(omegas) > K:
         omegas = omegas[:K]
     elif len(omegas) < K:
-        # Pad uniformly in the largest gap
-        omegas = np.sort(omegas)
-        gaps = np.diff(omegas)
-        max_gap_idx = np.argmax(gaps)
-        insert_point = (omegas[max_gap_idx] + omegas[max_gap_idx + 1]) / 2
-        omegas = np.sort(np.append(omegas, insert_point))[:K]
+        omegas = np.append(omegas, W)[:K]
     
-    # Ensure strictly increasing (remove duplicates)
-    omegas = np.unique(omegas)
-    return omegas
+    return np.sort(omegas)
+
+
+def make_quadratic_decay_grid(
+    W: float,
+    K: int,
+    beta: float = 3.0,
+) -> np.ndarray:
+    """
+    Strong power-law density decay from origin, very dense near 0 and sparser in tails.
+    
+    Uses power-law spacing with higher exponent: ω = ±W · (k/K_half)^β
+    
+    The exponent β controls concentration at the center. Use β > 1 for 
+    concentration near ω=0 (higher values = stronger concentration).
+    Typically β > α (from linear_decay) for stronger concentration.
+    
+    Parameters
+    ----------
+    W : float
+        Maximum absolute frequency.
+    K : int
+        Number of points (should be even for symmetry).
+    beta : float
+        Power-law exponent. Must be > 1 for concentration at center.
+        Higher β → more points near 0 (stronger concentration).
+        β = 1 gives uniform spacing, β >> 1 concentrates heavily at 0.
+        Default: 3.0 (stronger concentration than linear_decay's α=2.0).
+    
+    Returns
+    -------
+    omegas : np.ndarray
+        1D array of shape [K], with strong power-law density decay in [-W, W].
+    """
+    K_half = K // 2
+    
+    if beta <= 0:
+        raise ValueError(f"beta must be positive, got {beta}")
+    
+    if abs(beta - 1.0) < 1e-6:
+        # beta=1 gives uniform spacing
+        return np.linspace(-W, W, K)
+    
+    # Create positive half using power-law spacing with higher exponent
+    # k ranges from 0 to K_half
+    k = np.arange(K_half + 1)
+    
+    # Power-law transform with higher exponent for stronger concentration
+    scale = (k / K_half) ** beta
+    omegas_pos = W * scale
+    
+    # Mirror for negative half
+    omegas_neg = -omegas_pos[1:][::-1]
+    omegas = np.concatenate([omegas_neg, omegas_pos])
+    
+    # Ensure exactly K points
+    if len(omegas) > K:
+        omegas = omegas[:K]
+    elif len(omegas) < K:
+        omegas = np.append(omegas, W)[:K]
+    
+    return np.sort(omegas)
 
 
 def make_omega_grid(
     strategy: GridStrategy = "uniform",
     W: float = 8.0,
     K: int = 256,
-    w_center: float = 3.0,
-    frac_center: float = 0.9,
     lam: float = 2.0,
-    refinement_regions: int = 3,
+    alpha: float = 2.0,
+    beta: float = 3.0,
 ) -> np.ndarray:
     """
     Factory for ω-grids, selecting a strategy by string.
 
     Parameters
     ----------
-    strategy : {"uniform", "piecewise_centered", "logarithmic", "chebyshev", "adaptive"}
-        Which grid construction to use.
+    strategy : GridStrategy
+        Which grid construction to use. Options:
+        - "uniform": evenly spaced points
+        - "two_density_regions": dense center + sparse tails (2 densities)
+        - "three_density_regions": 3 density levels from center to tails
+        - "four_density_regions": 4 density levels from center to tails
+        - "exponential_decay": exponential spacing, dense near 0 (use λ > 1)
+        - "linear_decay": power-law spacing with exponent α (use α > 1)
+        - "quadratic_decay": power-law spacing with exponent β (use β > 1)
     W : float
         Overall max frequency |ω|.
     K : int
         Number of grid points.
-    w_center : float
-        Only used by "piecewise_centered": half-width of dense region.
-    frac_center : float
-        Only used by "piecewise_centered": fraction of points in dense region.
     lam : float
-        Only used by "logarithmic": decay rate parameter (default: 2.0).
-        Higher λ → more points near 0.
-    refinement_regions : int
-        Only used by "adaptive": number of density regions (default: 3).
+        Only used by "exponential_decay": decay rate parameter (default: 2.0).
+        Must be > 1 for concentration at center. Higher λ → more points near 0.
+    alpha : float
+        Only used by "linear_decay": concentration parameter (default: 2.0).
+        Must be > 1 for concentration at center. Higher α → more points near 0.
+    beta : float
+        Only used by "quadratic_decay": concentration parameter (default: 3.0).
+        Must be > 1 for concentration at center. Higher β → more points near 0.
 
     Returns
     -------
@@ -308,29 +525,30 @@ def make_omega_grid(
     Examples
     --------
     >>> omegas = make_omega_grid(strategy="uniform", W=8.0, K=256)
-    >>> omegas = make_omega_grid(strategy="piecewise_centered",
-    ...                          W=8.0, K=256, w_center=3.0, frac_center=0.9)
-    >>> omegas = make_omega_grid(strategy="logarithmic", W=8.0, K=256, lam=2.0)
-    >>> omegas = make_omega_grid(strategy="chebyshev", W=8.0, K=256)
-    >>> omegas = make_omega_grid(strategy="adaptive", W=8.0, K=256)
+    >>> omegas = make_omega_grid(strategy="two_density_regions", W=8.0, K=256)
+    >>> omegas = make_omega_grid(strategy="three_density_regions", W=8.0, K=256)
+    >>> omegas = make_omega_grid(strategy="four_density_regions", W=8.0, K=256)
+    >>> omegas = make_omega_grid(strategy="exponential_decay", W=8.0, K=256, lam=2.0)
+    >>> omegas = make_omega_grid(strategy="linear_decay", W=8.0, K=256, alpha=2.0)
+    >>> omegas = make_omega_grid(strategy="quadratic_decay", W=8.0, K=256, beta=3.0)
     """
     if strategy == "uniform":
         return make_uniform_grid(W=W, K=K)
-    elif strategy == "piecewise_centered":
-        return make_piecewise_centered_grid(
-            W=W,
-            K=K,
-            w_center=w_center,
-            frac_center=frac_center,
-        )
-    elif strategy == "logarithmic":
-        return make_logarithmic_grid(W=W, K=K, lam=lam)
-    elif strategy == "chebyshev":
-        return make_chebyshev_grid(W=W, K=K)
-    elif strategy == "adaptive":
-        return make_adaptive_grid(W=W, K=K, refinement_regions=refinement_regions)
+    elif strategy == "two_density_regions":
+        return make_two_density_regions_grid(W=W, K=K)
+    elif strategy == "three_density_regions":
+        return make_three_density_regions_grid(W=W, K=K)
+    elif strategy == "four_density_regions":
+        return make_four_density_regions_grid(W=W, K=K)
+    elif strategy == "exponential_decay":
+        return make_exponential_decay_grid(W=W, K=K, lam=lam)
+    elif strategy == "linear_decay":
+        return make_linear_decay_grid(W=W, K=K, alpha=alpha)
+    elif strategy == "quadratic_decay":
+        return make_quadratic_decay_grid(W=W, K=K, beta=beta)
     else:
         raise ValueError(
             f"Unknown ω-grid strategy: {strategy!r}. "
-            f"Supported: 'uniform', 'piecewise_centered', 'logarithmic', 'chebyshev', 'adaptive'."
+            f"Supported: 'uniform', 'two_density_regions', 'three_density_regions', "
+            f"'four_density_regions', 'exponential_decay', 'linear_decay', 'quadratic_decay'."
         )

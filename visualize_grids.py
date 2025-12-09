@@ -19,10 +19,12 @@ K = 64
 
 strategies = [
     ("uniform", {}),
-    ("piecewise_centered", {"w_center": 3.0, "frac_center": 0.9}),
-    ("logarithmic", {"lam": 2.0}),
-    ("chebyshev", {}),
-    ("adaptive", {}),
+    ("two_density_regions", {}),
+    ("three_density_regions", {}),
+    ("four_density_regions", {}),
+    ("exponential_decay", {"lam": 2.0}),
+    ("linear_decay", {"alpha": 2.0}),
+    ("quadratic_decay", {"beta": 3.0}),
 ]
 
 fig, axes = plt.subplots(len(strategies), 1, figsize=(12, 2.5 * len(strategies)))

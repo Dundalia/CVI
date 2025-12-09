@@ -24,14 +24,47 @@ Assumes the CF has a Gaussian-like structure: log φ(ω) ≈ iμω - ½σ²ω².
 
 ## Empirical Performance
 
-Grid search experiments on Taxi-v3 (264 configs, after removing Savgol and fixing PCHIP) revealed:
-- **MAE**: Gaussian (2.08) >> LS (3.34) >> FFT (11.81)
-- **MSE**: Gaussian (23.0) < LS (30.5) << FFT (711.8)
-- **RMSE/MAE ratio** (robustness indicator): Gaussian (1.23, best!) < LS (1.40) < FFT (1.61)
-- Gaussian collapse paired with adaptive/piecewise-centered grids and polar interpolation achieves near-zero error (MAE ≈ 10⁻¹⁵)
-- **In excellent configs** (<0.1 MAE): Gaussian dominates with 72/75 (96%), LS has only 3/75 (4%)
+Comprehensive grid search on Taxi-v3 (360 configurations) revealed that **collapse method is THE most critical factor** - even more important than interpolation or grid strategy.
 
-**Key insight**: **Gaussian is remarkably robust** - lowest RMSE/MAE ratio (1.23) indicates errors are tightly distributed and consistently small. When Gaussian makes mistakes, they're bounded and predictable. FFT's high ratio (1.61) indicates frequent large outlier errors, making it unpredictably bad.
+### Top 40 Configurations
+- **33 use Gaussian collapse** (82.5%) - MAE ~10⁻¹⁵ (machine precision)
+- **7 use LS collapse** (17.5%) - MAE ~10⁻⁷ (acceptable but 8 orders of magnitude worse)
+- **0 use FFT collapse** (catastrophic failure)
 
-**Recommendation**: Use **Gaussian collapse** as default. It exploits the natural structure of characteristic functions and achieves both the best accuracy AND highest robustness (lowest error variance). LS is a solid alternative if you need variance estimation or prefer interpretability. **STRONGLY avoid FFT** - not just worse on average but produces large unpredictable outliers.
+When paired with polar interpolation:
+- **Gaussian**: MAE = 1.27×10⁻¹⁵ to 6.08×10⁻¹⁴ (DOMINANT - achieves numerical precision)
+- **LS**: MAE = 1.07×10⁻⁷ to 9.13×10⁻⁶ (acceptable as fallback)
+- **FFT**: MAE = 7 to 27 (CATASTROPHIC - avoid at all costs)
+
+### Bottom 40 Configurations
+**FFT collapse dominates failures** with devastating impact:
+- **27 of worst 40 configs** (67.5%) use FFT
+- MAE ranges from 7 to 27 (vs. 10⁻¹⁵ for Gaussian)
+- Fails across **ALL grid strategies and interpolation methods**
+- Particularly catastrophic with uniform grid (MAE = 26.6, worst config)
+
+Even with optimal polar interpolation and advanced grids, FFT produces terrible results.
+
+### LS Collapse Behavior
+LS shows a specific failure mode:
+- Works acceptably with polar/PCHIP interpolation (MAE ~10⁻⁷)
+- **Catastrophically fails with Lanczos** interpolation (MAE = 6-8)
+- 13 of worst 40 configs are Lanczos + LS combinations
+
+### Method Synergy
+Collapse method effectiveness depends on interpolation pairing:
+- **Gaussian + Polar**: Perfect synergy - Gaussian's phase unwrapping exploits polar's magnitude/phase structure
+- **LS + Polar/PCHIP**: Acceptable - local polynomial fit works with smooth interpolation
+- **LS + Lanczos**: Total failure - Lanczos oscillations break LS fitting
+- **FFT + Anything**: Catastrophic - discretization artifacts and normalization issues
+
+**Critical Discovery**: Gaussian collapse achieves 8+ orders of magnitude better accuracy than alternatives. The performance gap is not gradual - it's a cliff. FFT is not "somewhat worse" - it's completely unusable.
+
+**Key insight**: Gaussian collapse works by unwrapping the phase of the CF and fitting a line through the origin, naturally exploiting the CF structure for Gaussian-like distributions. This fundamental alignment with CF properties explains its dramatic superiority.
+
+**Recommendation**: 
+1. **ALWAYS use Gaussian collapse** - non-negotiable for optimal performance
+2. **LS is acceptable as fallback** - if Gaussian unavailable, but expect ~8 orders of magnitude worse accuracy
+3. **NEVER use FFT collapse** - catastrophic across all configurations
+4. **Avoid LS with Lanczos** - specific failure mode to watch for
 

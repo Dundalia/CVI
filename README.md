@@ -18,30 +18,34 @@ pip install -r requirements.txt
 
 ## Experiment Suite (`experiment_suite.ipynb`)
 
-The notebook contains a comprehensive hyperparameter grid search evaluating 264 successful CVI configurations on Taxi-v3:
+The notebook contains a comprehensive hyperparameter grid search evaluating 360 CVI configurations on Taxi-v3:
 
 - **Variables tested**: 
-  - Grid strategies: uniform, piecewise-centered, logarithmic, chebyshev, adaptive
+  - Grid strategies: uniform, two_density_regions, three_density_regions, four_density_regions, exponential_decay, linear_decay, quadratic_decay
   - Frequency ranges (W): 10.0, 20.0
   - Grid sizes (K): 128, 256, 512
   - Interpolation methods: linear, polar, pchip, lanczos
   - Collapse methods: ls, fft, gaussian
 
-- **Key Results** (MAE values, with robustness insights from MSE/RMSE): 
-  - **Best config**: adaptive + polar + gaussian (MAE ≈ 10⁻¹⁵, exact match with VI)
-  - **Grid strategies**: adaptive (1.61, most robust) > piecewise (1.76) > logarithmic (1.97) > chebyshev (4.98) > uniform (6.09, UNSTABLE)
-  - **Collapse methods**: gaussian (2.08, most stable) >> ls (3.34) >> fft (11.81, high variance)
-  - **Interpolation**: polar (2.90, lowest variance) ≈ linear (2.93) << pchip (2.98, hidden instability) << lanczos (5.34)
-  - **Grid size**: Larger K better AND more stable: K=512 (2.50) > K=256 (3.30) > K=128 (4.81, unstable)
-  - **Critical finding**: MSE/RMSE analysis reveals uniform, PCHIP, and FFT have dangerous instability despite reasonable MAE
+- **Paradigm-Shifting Discovery**: Method combination matters FAR more than grid strategy or hyperparameters
+  - **polar + gaussian**: 33 of top 40 configs (82.5%) achieve MAE ~10⁻¹⁵ (machine precision)
+  - Works with **ALL grid strategies** - even uniform achieves excellent results with this combination
+  - **FFT collapse**: Catastrophically bad (MAE = 7-27) regardless of grid strategy or interpolation
+  - Grid strategy choice is nearly irrelevant when methods are correct
+
+- **Key Results**:
+  - **Best config**: four_density_regions + polar + gaussian (MAE = 1.27×10⁻¹⁵)
+  - **All grids work** with polar+gaussian: linear_decay (1.99×10⁻¹⁵), quadratic_decay (2.19×10⁻¹⁵), three_density_regions (2.26×10⁻¹⁵), even uniform (3.18×10⁻¹⁴)
+  - **All grids fail** with FFT or lanczos+LS: errors of 6-27 regardless of strategy
+  - **Hyperparameters barely matter**: K=128 with polar+gaussian outperforms K=512 with FFT by 15 orders of magnitude
 
 ### Grid Strategy Comparison
 
-The choice of ω-grid significantly impacts performance. Below shows the distribution of grid points for each strategy:
+The choice of ω-grid has surprisingly minimal impact when proper methods are used. Below shows the distribution of grid points for each strategy:
 
 ![Grid Comparison](grid_comparison.png)
 
-**Key insight**: The **adaptive grid strategy** achieves the best performance (MAE 1.61) AND highest robustness (lowest MSE variance) with **zero hyperparameters** by automatically concentrating density near ω=0 where moment extraction occurs. Combined with polar interpolation (lowest MSE variance among interpolators) and Gaussian collapse (most stable, RMSE/MAE ratio = 1.23), CVI can exactly match classical Value Iteration (MAE ≈ 10⁻¹⁵). **MSE/RMSE analysis reveals that stability matters as much as average performance** - many methods have hidden instabilities that make them unreliable in practice.
+**Key insight**: The experiments reveal that **method combination (interpolation + collapse) is THE critical factor**, not grid strategy. All seven grid strategies achieve MAE ~10⁻¹⁵ when paired with polar interpolation and Gaussian collapse. Conversely, even sophisticated multi-density grids fail catastrophically (MAE ~10+) when paired with FFT collapse. The universal recipe for success: **polar + gaussian + any reasonable grid**. This combination exploits the natural structure of characteristic functions to achieve results at the numerical precision limit.
 
 ## Key Methods Implemented
 
@@ -61,7 +65,7 @@ The choice of ω-grid significantly impacts performance. Below shows the distrib
 Comprehensive documentation is available in the `docs/` directory:
 
 - **`STATE.md`**: Overall implementation status, design choices, experimental findings, and known limitations
-- **`GRIDS.md`**: Grid construction methods (uniform, piecewise-centered, logarithmic, chebyshev, adaptive)
+- **`GRIDS.md`**: Grid construction methods (uniform, two/three/four density regions, exponential/linear/quadratic decay)
 - **`INTERPOLATION.md`**: Interpolation methods for evaluating V(s, γω) at off-grid frequencies
 - **`COLLAPSE.md`**: Collapse methods for extracting scalar Q-values from characteristic functions
 

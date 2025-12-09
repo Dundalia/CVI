@@ -3,7 +3,6 @@ from typing import Tuple, Optional, List
 import numpy as np
 from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
 import time
-import numpy as np
 from cvi_rl.algorithms.mc import evaluate_policy_monte_carlo
 from cvi_rl.algorithms.utils import sample_initial_states
 
@@ -11,9 +10,9 @@ from cvi_rl.algorithms.utils import sample_initial_states
 def value_iteration(
     env_spec: TabularEnvSpec,
     gamma: float,
-    iterations: int,
-    termination: float,
-    track_history: bool,
+    iterations: int = 1000,
+    termination: float = 1e-8,
+    track_history: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, Optional[List[np.ndarray]], Optional[List[float]]]:
     """
     Classical tabular Value Iteration for a TabularEnvSpec.
