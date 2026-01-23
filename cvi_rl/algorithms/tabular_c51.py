@@ -297,9 +297,12 @@ def run_c51(env_spec: TabularEnvSpec, env, config: Dict[str, Any], logger=None):
     }
 
 
-def plot_cdf_comparison(logger, returns, atoms, Z, policy, wandb_module):
+def plot_cdf_comparison(logger, returns, atoms, Z, policy, wandb_module, save_path="figures/cdf_c51.png"):
     try:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        import os
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
+        fig, ax = plt.subplots(figsize=(6, 4))
         
         # 1. Plot MC Empirical CDF
         sorted_returns = np.sort(returns)
@@ -315,14 +318,18 @@ def plot_cdf_comparison(logger, returns, atoms, Z, policy, wandb_module):
         cdf = np.cumsum(probs)
         
         # Plot as a step function
-        ax.step(atoms, cdf, color='red', linewidth=2, label=f'C51 Estimate (State {target_state})', where='post')
+        ax.step(atoms, cdf, color='red', linewidth=2, label=f'C51 (State {target_state})', where='post')
         
         ax.set_xlim(0, 1.0) # FrozenLake returns are usually in [0, 1]
-        ax.set_title(f"Return CDF Comparison (State {target_state})")
-        ax.set_xlabel("Return")
-        ax.set_ylabel("Cumulative Probability")
-        ax.legend()
+        ax.set_title("C51", fontweight='bold', fontsize=14)
+        ax.set_xlabel("Return", fontweight='bold', fontsize=12)
+        ax.set_ylabel("Cumulative Probability", fontweight='bold', fontsize=12)
+        ax.legend(fontsize=10)
         ax.grid(True, alpha=0.3)
+        
+        # Save locally
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Saved CDF plot to {save_path}")
         
         if wandb_module and wandb_module.run:
             logger({'distribution_plot': wandb_module.Image(fig)})

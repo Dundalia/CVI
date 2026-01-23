@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+from PIL import Image
 
 WANDB_ENTITY = "fatty_data"
 WANDB_PROJECT = "CVI-RL"
@@ -129,14 +130,14 @@ def process_experiment(env):
     #         )
     #         y_offset += 12  # Offset to avoid overlapping
     
-    ax.set_title(f"Mean V-Value: {env}")
-    ax.set_xlabel("Iteration")
-    ax.set_ylabel("Mean V-Value")
+    ax.set_title(env.capitalize(), fontweight='bold', fontsize=14)
+    ax.set_xlabel("Iteration", fontweight='bold', fontsize=12)
+    ax.set_ylabel("Mean Value Function", fontweight='bold', fontsize=12)
     ax.legend(title="Algorithm", loc="lower right")
     
     os.makedirs("figures", exist_ok=True)
     output_path = f"figures/mean_v_value_{env}.png"
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.savefig(output_path, dpi=125, bbox_inches="tight")
     plt.close()
     print(f"Saved plot to {output_path}")
 

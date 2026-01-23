@@ -482,8 +482,11 @@ def get_pdf_from_cf(omegas: np.ndarray, cf: np.ndarray) -> Tuple[np.ndarray, np.
     
     return xs, pdf_real
 
-def plot_cdf_comparison(logger, returns, omegas, V_cf, wandb_module):
+def plot_cdf_comparison(logger, returns, omegas, V_cf, wandb_module, save_path="figures/cdf_cvi.png"):
     try:
+        import os
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
         fig, ax = plt.subplots(figsize=(10, 6))
         
         # 1. Plot MC Empirical CDF
@@ -513,14 +516,18 @@ def plot_cdf_comparison(logger, returns, omegas, V_cf, wandb_module):
         if cdf[-1] > 0:
             cdf = cdf / cdf[-1]  # Normalize
         
-        ax.plot(xs, cdf, color='blue', linewidth=2, label=f'CVI Estimate (State {target_state})')
+        ax.plot(xs, cdf, color='blue', linewidth=2, label=f'CVI (State {target_state})')
         
         ax.set_xlim(0, 1.0) # FrozenLake returns are usually in [0, 1]
-        ax.set_title(f"Return CDF Comparison (State {target_state})")
-        ax.set_xlabel("Return")
-        ax.set_ylabel("Cumulative Probability")
-        ax.legend()
+        ax.set_title("CVI", fontweight='bold', fontsize=14)
+        ax.set_xlabel("Return", fontweight='bold', fontsize=12)
+        ax.set_ylabel("Cumulative Probability", fontweight='bold', fontsize=12)
+        ax.legend(fontsize=10)
         ax.grid(True, alpha=0.3)
+        
+        # Save locally
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Saved CDF plot to {save_path}")
         
         # Log to wandb
         if wandb_module and wandb_module.run:
