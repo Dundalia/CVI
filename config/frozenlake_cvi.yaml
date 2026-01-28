@@ -16,10 +16,10 @@ training:
     gamma: 0.99   # Shared: Discount factor
     grid_strategy: two_density_regions  # CVI-specific: Grid construction
     W: 200.0  # CVI-specific: Frequency range [-W, W]
-    K: 9000  # CVI-specific: Number of grid points
-    interp_method: polar  # CVI-specific: Interpolation method
+    K: 4096  # CVI-specific: Number of grid points
+    interp_method: linear  # CVI-specific: Interpolation method
     collapse_method: gaussian  # CVI-specific: Collapse method
-    eval_termination: 1e-6  # Shared: Convergence threshold
+    eval_termination: 1e-4  # Shared: Convergence threshold
     max_iters: 20  # CVI-specific: Max VI iterations
     eval_episodes: 200  # Shared: Episodes for MC evaluation
     max_steps: 200  # Shared: Max steps per MC episode

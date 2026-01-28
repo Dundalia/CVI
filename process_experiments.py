@@ -18,7 +18,8 @@ def get_runs(api, project_path, env_name, algo_name):
     """Fetch runs matching environment and algorithm tags, including all seeds."""
     filters = {
         "tags": {"$all": [f"env_{env_name}", f"algo_{algo_name}"]},
-        "state": "finished"
+        "state": {"$in": ["finished", "crashed"]}
+        # "state": "finished"
     }
     runs = api.runs(project_path, filters=filters)
     
@@ -134,12 +135,18 @@ def process_experiment(env):
     ax.set_ylabel("Value Function Approximation Error", fontweight='bold', fontsize=12)
     ax.legend(title="Algorithm", loc="lower right")
     
-    ax.set_yscale('log')
+    #ax.set_yscale('log') #! HERE DONT
+    #ax.set_ylim(bottom=1e-3)
+    
+    ax.set_ylim(bottom=0)
+    
+    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x)}'))
     
     os.makedirs("figures", exist_ok=True)
     output_path = f"figures/td_error_{env}.png"
     plt.savefig(output_path, dpi=125, bbox_inches="tight")
     plt.close()
+
     print(f"Saved plot to {output_path}")
 
 

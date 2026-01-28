@@ -406,10 +406,11 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
         policy = np.argmax(Q_scalar, axis=1)
         V = np.max(Q_scalar, axis=1)
         mean_v = np.mean(V)  # Mean of state values
+        td_error = np.max(np.abs(V - optimal_V))
         V_history.append(V.copy())
 
         if logger:
-            log_dict = {'mean_v_value': float(mean_v)}
+            log_dict = {'mean_v_value': float(mean_v), 'td_error': td_error}
             logger(log_dict, step=iter_num + 1)
             
         # Check convergence (policy stable)
@@ -447,9 +448,9 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     
     metrics = {
         'training_time': elapsed_time,
-        'converged_iterations': len(v_history),
+        'converged_iterations': len(V_history),
         'expected_initial_state_value': cvi_expected_from_reset,
-        "final_mean_v_value": float(np.mean(v_history[-1])),
+        "final_mean_v_value": float(np.mean(V_history[-1])),
         **mc_metrics
     }
     
