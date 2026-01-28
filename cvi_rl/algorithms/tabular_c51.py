@@ -14,6 +14,7 @@ except ImportError:
 from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
 from cvi_rl.algorithms.mc import evaluate_policy_monte_carlo
 from cvi_rl.algorithms.utils import sample_initial_states
+from cvi_rl.algorithms.tabular_vi import value_iteration
 
 
 def _make_atoms(v_min: float, v_max: float, n_atoms: int) -> Tuple[np.ndarray, float]:
@@ -232,6 +233,15 @@ def run_c51(env_spec: TabularEnvSpec, env, config: Dict[str, Any], logger=None):
     print(f"  Max iters: {max_iters}, eps: {eps}")
 
     start = time.time()
+    
+    # Compute true optimal value function for error calculation
+    _, optimal_V, _, _ = value_iteration(
+        env_spec,
+        gamma,
+        iterations=10000,  # High max iters
+        termination=1e-12,  # Tight convergence
+        track_history=False,
+    )
     policy, Z, atoms, value_history = categorical_distributional_value_iteration(
         env_spec=env_spec,
         gamma=gamma,
@@ -261,7 +271,8 @@ def run_c51(env_spec: TabularEnvSpec, env, config: Dict[str, Any], logger=None):
     # Log the value function history
     if logger and value_history is not None:
         for i in range(1, len(value_history)):
-            logger({'mean_v_value': float(np.mean(value_history[i]))}, step=i)
+            td_error = np.max(np.abs(value_history[i] - optimal_V))
+            logger({'mean_v_value': float(np.mean(value_history[i])), 'td_error': td_error}, step=i)
 
     if eval_episodes > 0:
         avg_return, var_return, success_rate, returns, avg_steps, var_steps = evaluate_policy_monte_carlo(

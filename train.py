@@ -4,6 +4,7 @@ import argparse
 import sys
 from typing import Dict, Any
 import datetime
+import os
 
 import yaml
 import numpy as np
@@ -149,6 +150,7 @@ def main():
     
     if 'policy' in results:
         policy_filename = f"{algorithm}_{env_name}_policy.npy"
+        os.makedirs("saved_policies", exist_ok=True)
         np.save(f"saved_policies/{policy_filename}", results['policy'])
         print(f"Policy saved to saved_policies/{policy_filename}")
         

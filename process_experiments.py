@@ -2,13 +2,12 @@ import wandb
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 import os
 from PIL import Image
 
 WANDB_ENTITY = "fatty_data"
 WANDB_PROJECT = "CVI-RL"
-METRIC_NAME = "mean_v_value"
+METRIC_NAME = "td_error"
 
 ALGORITHMS = ["cvi", "pi", "vi", "c51"]
 COLORS = {"cvi": "#1f77b4", "pi": "#ff7f0e", "vi": "#2ca02c", "c51": "#d62728"}
@@ -78,8 +77,8 @@ def process_experiment(env):
     max_step = max(df["_step"].max() for df in algo_data.values())
     
     # Plot
-    sns.set_style("whitegrid")
     fig, ax = plt.subplots(figsize=(10, 6))
+    ax.grid(True, which='both', linestyle='--', alpha=0.5)
     
     final_values = {}
     
@@ -132,11 +131,13 @@ def process_experiment(env):
     
     ax.set_title(env.capitalize(), fontweight='bold', fontsize=14)
     ax.set_xlabel("Iteration", fontweight='bold', fontsize=12)
-    ax.set_ylabel("Mean Value Function", fontweight='bold', fontsize=12)
+    ax.set_ylabel("Value Function Approximation Error", fontweight='bold', fontsize=12)
     ax.legend(title="Algorithm", loc="lower right")
     
+    ax.set_yscale('log')
+    
     os.makedirs("figures", exist_ok=True)
-    output_path = f"figures/mean_v_value_{env}.png"
+    output_path = f"figures/td_error_{env}.png"
     plt.savefig(output_path, dpi=125, bbox_inches="tight")
     plt.close()
     print(f"Saved plot to {output_path}")

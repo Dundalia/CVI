@@ -10,6 +10,7 @@ import time
 
 from cvi_rl.algorithms.mc import evaluate_policy_monte_carlo 
 from cvi_rl.algorithms.utils import sample_initial_states
+from cvi_rl.algorithms.tabular_vi import value_iteration
 
 from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
 from cvi_rl.cf.grids import make_omega_grid, GridStrategy
@@ -369,9 +370,18 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     n_states = env_spec.n_states
     start_time = time.time()
     
+    # Compute true optimal value function for error calculation
+    _, optimal_V, _, _ = value_iteration(
+        env_spec,
+        gamma,
+        iterations=10000,  # High max iters
+        termination=1e-12,  # Tight convergence
+        track_history=False,
+    )
+    
     policy = np.zeros(n_states, dtype=int)
         
-    v_history = []
+    V_history = []
     
     for iter_num in tqdm(range(max_iters), desc="CVI Value Iteration"):
         policy_prev = policy.copy()
@@ -394,8 +404,9 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
         
         # 4) Greedy policy improvement
         policy = np.argmax(Q_scalar, axis=1)
-        mean_v = np.mean(np.max(Q_scalar, axis=1))  # Mean of state values (max Q per state)
-        v_history.append(mean_v)
+        V = np.max(Q_scalar, axis=1)
+        mean_v = np.mean(V)  # Mean of state values
+        V_history.append(V.copy())
 
         if logger:
             log_dict = {'mean_v_value': float(mean_v)}
@@ -407,6 +418,12 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
             break
     
     elapsed_time = time.time() - start_time
+    
+    # Log td_error after training
+    if logger and V_history:
+        for i in range(1, len(V_history)):
+            td_error = np.max(np.abs(V_history[i] - optimal_V))
+            logger({'td_error': td_error}, step=i)
     
     states_to_evaluate = sample_initial_states(env, eval_episodes)
     cvi_expected_from_reset = float(np.mean(np.max(Q_scalar[states_to_evaluate], axis=1)))

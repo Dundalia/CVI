@@ -135,6 +135,15 @@ def run_value_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=None
     
     start_time = time.time()
     
+    # Compute true optimal value function for error calculation
+    _, optimal_V, _, _ = value_iteration(
+        env_spec,
+        gamma,
+        iterations=10000,  # High max iters
+        termination=1e-12,  # Tight convergence
+        track_history=False,
+    )
+    
     policy, V_values, v_history, max_change_history = value_iteration(
         env_spec,
         gamma,
@@ -160,7 +169,8 @@ def run_value_iteration(env_spec: TabularEnvSpec, env, config: dict, logger=None
     
     if logger and v_history is not None:
         for i in range(1, len(v_history)):
-            logger({'mean_v_value': float(np.mean(v_history[i]))}, step=i)
+            td_error = np.max(np.abs(v_history[i] - optimal_V))
+            logger({'mean_v_value': float(np.mean(v_history[i])), 'td_error': td_error}, step=i)
             
     if config['eval_episodes'] > 0 and env is not None:
         n_episodes = config['eval_episodes']
