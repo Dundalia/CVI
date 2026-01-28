@@ -9,9 +9,19 @@ WANDB_ENTITY = "fatty_data"
 WANDB_PROJECT = "CVI-RL"
 METRIC_NAME = "td_error"
 
+import matplotlib.cm as cm
+
 ALGORITHMS = ["cvi", "pi", "vi", "c51"]
 COLORS = {"cvi": "#1f77b4", "pi": "#ff7f0e", "vi": "#2ca02c", "c51": "#d62728"}
 ALGO_LABELS = {"cvi": "CVI", "pi": "PI", "vi": "VI", "c51": "C51"}
+
+viridis = cm.get_cmap('viridis')
+n_algos = len(ALGORITHMS)
+COLORS = {}
+for i, algo in enumerate(ALGORITHMS):
+    rgba = viridis(i / (n_algos - 1))
+    hex_color = '#{:02x}{:02x}{:02x}'.format(int(rgba[0]*255), int(rgba[1]*255), int(rgba[2]*255))
+    COLORS[algo] = hex_color
 
 
 def get_runs(api, project_path, env_name, algo_name):
