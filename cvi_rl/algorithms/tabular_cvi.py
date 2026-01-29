@@ -10,6 +10,7 @@ import time
 
 from cvi_rl.algorithms.mc import evaluate_policy_monte_carlo 
 from cvi_rl.algorithms.utils import sample_initial_states
+from cvi_rl.algorithms.tabular_vi import value_iteration
 
 from cvi_rl.envs.base import TabularEnvSpec, TransitionModel
 from cvi_rl.cf.grids import make_omega_grid, GridStrategy
@@ -369,9 +370,18 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     n_states = env_spec.n_states
     start_time = time.time()
     
+    # Compute true optimal value function for error calculation
+    _, optimal_V, _, _ = value_iteration(
+        env_spec,
+        gamma,
+        iterations=10000,  # High max iters
+        termination=1e-12,  # Tight convergence
+        track_history=False,
+    )
+    
     policy = np.zeros(n_states, dtype=int)
         
-    v_history = []
+    V_history = []
     
     for iter_num in tqdm(range(max_iters), desc="CVI Value Iteration"):
         policy_prev = policy.copy()
@@ -394,11 +404,13 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
         
         # 4) Greedy policy improvement
         policy = np.argmax(Q_scalar, axis=1)
-        mean_v = np.mean(np.max(Q_scalar, axis=1))  # Mean of state values (max Q per state)
-        v_history.append(mean_v)
+        V = np.max(Q_scalar, axis=1)
+        mean_v = np.mean(V)  # Mean of state values
+        td_error = np.max(np.abs(V - optimal_V))
+        V_history.append(V.copy())
 
         if logger:
-            log_dict = {'mean_v_value': float(mean_v)}
+            log_dict = {'mean_v_value': float(mean_v), 'td_error': td_error}
             logger(log_dict, step=iter_num + 1)
             
         # Check convergence (policy stable)
@@ -407,6 +419,12 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
             break
     
     elapsed_time = time.time() - start_time
+    
+    # Log td_error after training
+    if logger and V_history:
+        for i in range(1, len(V_history)):
+            td_error = np.max(np.abs(V_history[i] - optimal_V))
+            logger({'td_error': td_error}, step=i)
     
     states_to_evaluate = sample_initial_states(env, eval_episodes)
     cvi_expected_from_reset = float(np.mean(np.max(Q_scalar[states_to_evaluate], axis=1)))
@@ -430,9 +448,9 @@ def run_cvi(env_spec: TabularEnvSpec, env, config: dict, logger=None):
     
     metrics = {
         'training_time': elapsed_time,
-        'converged_iterations': len(v_history),
+        'converged_iterations': len(V_history),
         'expected_initial_state_value': cvi_expected_from_reset,
-        "final_mean_v_value": float(np.mean(v_history[-1])),
+        "final_mean_v_value": float(np.mean(V_history[-1])),
         **mc_metrics
     }
     
@@ -482,8 +500,11 @@ def get_pdf_from_cf(omegas: np.ndarray, cf: np.ndarray) -> Tuple[np.ndarray, np.
     
     return xs, pdf_real
 
-def plot_cdf_comparison(logger, returns, omegas, V_cf, wandb_module):
+def plot_cdf_comparison(logger, returns, omegas, V_cf, wandb_module, save_path="figures/cdf_cvi.png"):
     try:
+        import os
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
         fig, ax = plt.subplots(figsize=(10, 6))
         
         # 1. Plot MC Empirical CDF
@@ -513,14 +534,18 @@ def plot_cdf_comparison(logger, returns, omegas, V_cf, wandb_module):
         if cdf[-1] > 0:
             cdf = cdf / cdf[-1]  # Normalize
         
-        ax.plot(xs, cdf, color='blue', linewidth=2, label=f'CVI Estimate (State {target_state})')
+        ax.plot(xs, cdf, color='blue', linewidth=2, label=f'CVI (State {target_state})')
         
         ax.set_xlim(0, 1.0) # FrozenLake returns are usually in [0, 1]
-        ax.set_title(f"Return CDF Comparison (State {target_state})")
-        ax.set_xlabel("Return")
-        ax.set_ylabel("Cumulative Probability")
-        ax.legend()
+        ax.set_title("CVI", fontweight='bold', fontsize=14)
+        ax.set_xlabel("Return", fontweight='bold', fontsize=12)
+        ax.set_ylabel("Cumulative Probability", fontweight='bold', fontsize=12)
+        ax.legend(fontsize=10)
         ax.grid(True, alpha=0.3)
+        
+        # Save locally
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Saved CDF plot to {save_path}")
         
         # Log to wandb
         if wandb_module and wandb_module.run:
